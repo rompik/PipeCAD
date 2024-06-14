@@ -2025,6 +2025,9 @@ class SkeyEditorDialog(QDialog):
         self.callLoadSkeyTree()   
         
     def callImportSkeyFromIDF( self ):
+        
+        self.groups.clear()
+        
         symbol_file_path = self.callSelectFileUsingExplorer( "idf" )
         if symbol_file_path == None:
             return 
