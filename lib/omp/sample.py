@@ -1,5 +1,5 @@
 from PythonQt.QtCore import *
-from PythonQt.QtGui import *
+from PythonQt.QtGui import QVBoxLayout, QDialog, QLabel
 
 from pipecad import *
 

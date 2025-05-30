@@ -1,13 +1,18 @@
-from PythonQt.QtCore import *
-from PythonQt.QtGui import *
-
-from pipecad import *
-
-import omp 
+import omp
 import json
 import os
-import math 
-import pandas as pd
+
+from PythonQt.QtGui import (
+    QGraphicsScene, QGraphicsLineItem, QGraphicsRectItem, QGraphicsEllipseItem,
+    QGraphicsPolygonItem, QPolygonF, QGraphicsItem, QColor, QPen, QBrush,
+    QGraphicsSimpleTextItem, QApplication, QDialog, QGroupBox, QVBoxLayout, QHBoxLayout, QIcon,
+    QTreeWidgetItem, QPushButton, QCursor, QFileDialog
+)
+
+
+from PythonQt.QtCore import QRectF, Qt, QPoint, QPointF, QSize
+
+from pipecad import *
 
 class ArrivePoint( QGraphicsEllipseItem ) :
     def __init__( self, parent = None ):
@@ -15,7 +20,7 @@ class ArrivePoint( QGraphicsEllipseItem ) :
         self.setFlag( QGraphicsItem.ItemIsMovable )
         pen_arrive = QPen( QColor( 51, 51, 255 ) )
         pen_arrive.setWidth( 2 )
-        pen_arrive.setStyle( Qt.SolidLine )   
+        pen_arrive.setStyle( Qt.SolidLine )
         self.setPen( pen_arrive )
 
 class LeavePoint( QGraphicsEllipseItem ) :
@@ -24,16 +29,16 @@ class LeavePoint( QGraphicsEllipseItem ) :
         self.setFlag( QGraphicsItem.ItemIsMovable )
         pen_leave = QPen( QColor( 255, 0, 0 ) )
         pen_leave.setWidth( 2 )
-        pen_leave.setStyle( Qt.SolidLine )   
+        pen_leave.setStyle( Qt.SolidLine )
         self.setPen( pen_leave )
-        
+
 class TeePoint( QGraphicsEllipseItem ) :
     def __init__( self, parent = None ):
         super( TeePoint, self ).__init__( QRectF( -5.0, -5.0, 10.0, 10.0) )
         self.setFlag( QGraphicsItem.ItemIsMovable )
         pen_tee = QPen( Qt.magenta )
         pen_tee.setWidth( 2 )
-        pen_tee.setStyle( Qt.SolidLine )   
+        pen_tee.setStyle( Qt.SolidLine )
         self.setPen( pen_tee )
 
 class SpindlePoint( QGraphicsEllipseItem ) :
@@ -42,125 +47,105 @@ class SpindlePoint( QGraphicsEllipseItem ) :
         self.setFlag( QGraphicsItem.ItemIsMovable )
         pen_spindle = QPen( QColor( 111, 0, 0 ) )
         pen_spindle.setWidth( 2 )
-        pen_spindle.setStyle( Qt.SolidLine )   
+        pen_spindle.setStyle( Qt.SolidLine )
         self.setPen( pen_spindle )
-                 
-      
+
+
 class SheetLayout( QGraphicsScene ):
-    def __init__( self, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.cursor_coordinates = []
-        
         self.symbol_drawlist_temp = []
         self.symbol_drawlist = []
         self.grid_drawlist = []
-        
-        self.arrive_point = ArrivePoint( self )
-        self.leave_point = LeavePoint( self )
-        self.tee_point = TeePoint( self )
-        self.spindle_point = SpindlePoint( self )
+
+        # Pre-create reusable graphics items
+        self.arrive_point = ArrivePoint(self)
+        self.leave_point = LeavePoint(self)
+        self.tee_point = TeePoint(self)
+        self.spindle_point = SpindlePoint(self)
         self.line = QGraphicsLineItem()
         self.rect = QGraphicsRectItem()
         self.triangle = QGraphicsPolygonItem()
-        
+
+        # Sheet and grid settings
         self.sheet_width = 400
         self.sheet_height = 400
         self.step_x = 5
         self.step_y = 5
         self.origin_x = 0
         self.origin_y = 0
-       
-        #self.scale = 1.0
-        
-        self.show_grids = False 
+
+        self.show_grids = False
         self.current_action = ""
         self.press_number = 0
-        self.cursor_position = QPoint( 0, 0 )
+        self.cursor_position = QPoint(0, 0)
         self.point_diameter = 5
-                
+
         self.draw_grid()
-    
+
     def draw_grid_labels( self ):
         print( "test" )
 
-    def convert_to_relative_position( self, scene_position ):
-        new_position = QPointF( round ( ( scene_position.x() - self.sheet_width / 2 ) / self.step_x / 20 , 3 ), 
-                                round ( ( self.sheet_height / 2 - scene_position.y() ) / self.step_y / 20 , 3 ) ) 
-                   
-                    
-        return new_position        
-    
-    def convert_to_absolute_position( self, relative_position ):
-        new_position = QPointF( round ( ( relative_position.x() - self.sheet_width / 2 ) / self.step_x / 20 , 2 ), 
-                                round ( ( self.sheet_height / 2 - relative_position.y() ) / self.step_y / 20 , 2 ) )               
-        return new_position        
-    
-    def draw_grid( self ):
-        
+    def convert_to_relative_position(self, scene_position):
+        x = (scene_position.x() - self.sheet_width / 2) / (self.step_x * 20)
+        y = (self.sheet_height / 2 - scene_position.y()) / (self.step_y * 20)
+        return QPointF(round(x, 3), round(y, 3))
+
+    def convert_to_absolute_position(self, relative_position):
+        x = relative_position.x() * self.step_x * 20 + self.sheet_width / 2
+        y = self.sheet_height / 2 - relative_position.y() * self.step_y * 20
+        return QPointF(round(x, 2), round(y, 2))
+
+    def draw_grid(self):
         width = self.sheet_width
         height = self.sheet_height
-        
-        self.setSceneRect( 0, 0, width, height )
-        self.setItemIndexMethod( QGraphicsScene.NoIndex )
-        
-        pen_axis = QPen( QColor( 126, 128, 135 ) )
-        pen_axis.setWidth( 1 )
-        pen_axis.setStyle( Qt.SolidLine )    
-                
-        pen_grid_main = QPen( QColor( 212, 212, 212 ) )
-        pen_grid_main.setWidth( 1 )
-        pen_grid_main.setStyle( Qt.SolidLine )    
-        
-        pen_grid_sec = QPen( QColor( 250, 250, 250 ) )
-        pen_grid_sec.setWidth( 0.5 )
-        pen_grid_sec.setStyle( Qt.SolidLine )  
-        
-        for x in range( 0, int( self.sheet_width / self.step_x ) + 1 ):
+
+        self.setSceneRect(0, 0, width, height)
+        self.setItemIndexMethod(QGraphicsScene.NoIndex)
+
+        pen_axis = QPen(QColor(126, 128, 135), 1, Qt.SolidLine)
+        pen_grid_main = QPen(QColor(212, 212, 212), 1, Qt.SolidLine)
+        pen_grid_sec = QPen(QColor(250, 250, 250), 0.5, Qt.SolidLine)
+
+        x_steps = int(width / self.step_x) + 1
+        y_steps = int(height / self.step_y) + 1
+        half_width = width / 2
+        half_height = height / 2
+
+        for x in range(x_steps):
             xc = x * self.step_x
             if x % 10 == 0:
-                label_text = str( ( xc - self.sheet_width / 2 ) / 100 ) 
-                label = QGraphicsSimpleTextItem( label_text )
-                label_width = label.boundingRect().size().width()
-                label_height = label.boundingRect().size().height()
-                label_pos_x = xc - label_width / 2
-                label_pos_y = self.sheet_height + label_height / 2
-                label.setPos( label_pos_x, label_pos_y )
-                self.addItem( label )   
-        
-            if x % 10 == 0:
-                if x == int( self.sheet_width / self.step_x / 2 ):
-                    self.grid_drawlist.append( self.addLine( xc, 0, xc, height, pen_axis ) )
-                else:
-                    self.grid_drawlist.append( self.addLine( xc, 0, xc, height, pen_grid_main ) )
-            else: 
-                self.grid_drawlist.append( self.addLine( xc, 0, xc, height, pen_grid_sec ) )
+                label_text = str((xc - half_width) / 100)
+                label = QGraphicsSimpleTextItem(label_text)
+                label_rect = label.boundingRect()
+                label.setPos(xc - label_rect.width() / 2, height + label_rect.height() / 2)
+                self.addItem(label)
 
-        for y in range( 0, int( self.sheet_height / self.step_y ) + 1 ):
+                pen = pen_axis if x == x_steps // 2 else pen_grid_main
+            else:
+                pen = pen_grid_sec
+            self.grid_drawlist.append(self.addLine(xc, 0, xc, height, pen))
+
+        for y in range(y_steps):
             yc = y * self.step_y
+            if y % 10 == 0 and int((half_height - yc) / 10) != -20:
+                label_text = str((half_height - yc) / 100)
+                label = QGraphicsSimpleTextItem(label_text)
+                label_rect = label.boundingRect()
+                label.setPos(-label_rect.width() - 5, yc - label_rect.height() / 2)
+                self.addItem(label)
 
-            if y % 10 == 0 and int( ( self.sheet_height / 2 - yc ) / 10 ) != -20:
-                label_text = str(  ( self.sheet_height / 2 - yc ) / 100  ) 
-                label = QGraphicsSimpleTextItem( label_text )
-                label_width = label.boundingRect().size().width()
-                label_height = label.boundingRect().size().height()
-                label_pos_x = - label_width - 5
-                label_pos_y = yc - label_height / 2
-                label.setPos( label_pos_x, label_pos_y )
-                self.addItem( label )  
-                
-            if y % 10 == 0:
-                if y == int( self.sheet_height / self.step_x / 2 ):
-                    self.grid_drawlist.append( self.addLine( 0, yc, width, yc, pen_axis ) )
-                else:
-                    self.grid_drawlist.append( self.addLine( 0, yc, width, yc, pen_grid_main ) )
-            else: 
-                self.grid_drawlist.append( self.addLine( 0, yc, width, yc, pen_grid_sec ) )
-            
+                pen = pen_axis if y == y_steps // 2 else pen_grid_main
+            else:
+                pen = pen_grid_sec
+            self.grid_drawlist.append(self.addLine(0, yc, width, yc, pen))
+
     def set_grid_center( self, grid_center = "Center" ):
         if grid_center == "Center":
-            self.origin_x = self.sheet_width / 2 
-            self.origin_y = self.sheet_height / 2 
-        
+            self.origin_x = self.sheet_width / 2
+            self.origin_y = self.sheet_height / 2
+
     def set_visible( self, visible = True ):
         for line in self.grid_drawlist:
             line.setVisible(visible)
@@ -173,7 +158,7 @@ class SheetLayout( QGraphicsScene ):
     def set_opacity( self, opacity ):
         for line in self.grid_drawlist:
             line.setOpacity( opacity )
-    
+
     def keyPressEvent( self, event ):
         if event.key() == ( Qt.Key_Control and Qt.Key_Z ):
             self.undo()
@@ -188,89 +173,122 @@ class SheetLayout( QGraphicsScene ):
 
     def undo( self ):
         print( "Delete the last line from self.drawlist and draw all the others" )
-        
+
     def redo( self ):
         print( "Delete the last line from self.drawlist and draw all the others" )
-      
-    def mousePressEvent( self, mouse_event ):
-        self.cursor_position = QPointF( mouse_event.scenePos().x(), mouse_event.scenePos().y() )
-        if mouse_event.button() == Qt.LeftButton and self.current_action == "draw_arrive_point":
-                self.cursor_coordinates.append( self.cursor_position )
-                self.draw_arrive_point( self.cursor_coordinates )             
-                self.press_number = 0
-                self.current_action = ""
-                QApplication.restoreOverrideCursor()
-                for item in self.symbol_drawlist_temp:
-                    self.removeItem( item )
-                    
+
+    def mousePressEvent(self, mouse_event):
+        self.cursor_position = QPointF(mouse_event.scenePos().x(), mouse_event.scenePos().y())
+        action = self.current_action
+        btn = mouse_event.button()
+
+        def finalize_draw(draw_func):
+            self.cursor_coordinates.append(self.cursor_position)
+            draw_func(self.cursor_coordinates)
+            self.press_number = 0
+            self.current_action = ""
+            QApplication.restoreOverrideCursor()
+            for item in self.symbol_drawlist_temp:
+                self.removeItem(item)
+
+        if btn == Qt.LeftButton:
+            if action == "draw_arrive_point":
+                finalize_draw(self.draw_arrive_point)
+            elif action == "draw_leave_point":
+                finalize_draw(self.draw_leave_point)
+            elif action == "draw_tee_point":
+                finalize_draw(self.draw_tee_point)
+            elif action == "draw_spindle_point":
+                finalize_draw(self.draw_spindle_point)
+            elif action == "draw_line":
+                self.press_number += 1
+                if self.press_number == 1:
+                    self.cursor_coordinates.append(self.cursor_position)
+                elif self.press_number == 2:
+                    finalize_draw(self.draw_line)
+            elif action == "draw_rect":
+                self.press_number += 1
+                if self.press_number == 1:
+                    self.cursor_coordinates.append(self.cursor_position)
+                elif self.press_number == 2:
+                    finalize_draw(self.draw_rect)
+            elif action == "draw_triangle":
+                self.press_number += 1
+                if self.press_number == 1:
+                    self.cursor_coordinates.append(self.cursor_position)
+                elif self.press_number == 2:
+                    self.cursor_coordinates.append(self.cursor_position)
+                elif self.press_number == 3:
+                    finalize_draw(self.draw_triangle)
+
         elif mouse_event.button() == Qt.LeftButton and self.current_action == "draw_leave_point":
                 self.cursor_coordinates.append( self.cursor_position )
-                self.draw_leave_point( self.cursor_coordinates )             
+                self.draw_leave_point( self.cursor_coordinates )
                 self.press_number = 0
                 self.current_action = ""
                 QApplication.restoreOverrideCursor()
                 for item in self.symbol_drawlist_temp:
                     self.removeItem( item )
-                          
+
         elif mouse_event.button() == Qt.LeftButton and self.current_action == "draw_tee_point":
                 self.cursor_coordinates.append( self.cursor_position )
-                self.draw_tee_point( self.cursor_coordinates )             
+                self.draw_tee_point( self.cursor_coordinates )
                 self.press_number = 0
                 self.current_action = ""
                 QApplication.restoreOverrideCursor()
                 for item in self.symbol_drawlist_temp:
                     self.removeItem( item )
-                    
+
         elif mouse_event.button() == Qt.LeftButton and self.current_action == "draw_spindle_point":
                 self.cursor_coordinates.append( self.cursor_position )
-                self.draw_spindle_point( self.cursor_coordinates )             
+                self.draw_spindle_point( self.cursor_coordinates )
                 self.press_number = 0
                 self.current_action = ""
                 QApplication.restoreOverrideCursor()
                 for item in self.symbol_drawlist_temp:
                     self.removeItem( item )
-                    
+
         elif mouse_event.button() == Qt.LeftButton and self.current_action == "draw_line":
             self.press_number = self.press_number + 1
             if self.press_number == 1:
                 self.cursor_coordinates.append( self.cursor_position )
-            elif self.press_number == 2: 
-                self.cursor_coordinates.append( self.cursor_position ) 
-                self.draw_line( self.cursor_coordinates )             
+            elif self.press_number == 2:
+                self.cursor_coordinates.append( self.cursor_position )
+                self.draw_line( self.cursor_coordinates )
                 self.press_number = 0
                 self.current_action = ""
                 QApplication.restoreOverrideCursor()
                 for item in self.symbol_drawlist_temp:
                     self.removeItem( item )
-                    
+
         elif mouse_event.button() == Qt.LeftButton and self.current_action == "draw_rect":
             self.press_number = self.press_number + 1
             if self.press_number == 1:
                 self.cursor_coordinates.append( self.cursor_position )
-            elif self.press_number == 2: 
-                self.cursor_coordinates.append( self.cursor_position ) 
-                self.draw_rect( self.cursor_coordinates )             
+            elif self.press_number == 2:
+                self.cursor_coordinates.append( self.cursor_position )
+                self.draw_rect( self.cursor_coordinates )
                 self.press_number = 0
                 self.current_action = ""
                 QApplication.restoreOverrideCursor()
                 for item in self.symbol_drawlist_temp:
-                    self.removeItem( item )  
-                    
+                    self.removeItem( item )
+
         elif mouse_event.button() == Qt.LeftButton and self.current_action == "draw_triangle":
             self.press_number = self.press_number + 1
             if self.press_number == 1:
                 self.cursor_coordinates.append( self.cursor_position )
-            elif self.press_number == 2: 
-                self.cursor_coordinates.append( self.cursor_position ) 
-            elif self.press_number == 3: 
-                self.cursor_coordinates.append( self.cursor_position )               
-                self.draw_triangle( self.cursor_coordinates )  
+            elif self.press_number == 2:
+                self.cursor_coordinates.append( self.cursor_position )
+            elif self.press_number == 3:
+                self.cursor_coordinates.append( self.cursor_position )
+                self.draw_triangle( self.cursor_coordinates )
                 QApplication.restoreOverrideCursor()
                 for item in self.symbol_drawlist_temp:
                     self.removeItem( item )
                 self.press_number = 0
                 self.current_action = ""
-           
+
     def mouseMoveEvent( self, mouse_event ):
         self.cursor_position = QPoint( mouse_event.scenePos().x(), mouse_event.scenePos().y() )
         if self.press_number == 0 and self.current_action == "draw_arrive_point":
@@ -278,282 +296,290 @@ class SheetLayout( QGraphicsScene ):
                 self.cursor_coordinates.append( self.cursor_position )
             else:
                 self.cursor_coordinates[0] = self.cursor_position
-                    
+
             self.removeItem( self.arrive_point )
             self.arrive_point = ArrivePoint( self )
             self.arrive_point.setPos( self.cursor_coordinates[0].x(), self.cursor_coordinates[0].y() )
             self.addItem( self.arrive_point )
             self.symbol_drawlist_temp.append( self.arrive_point )
-        
+
         elif self.press_number == 0 and self.current_action == "draw_leave_point":
             if len( self.cursor_coordinates ) == 0:
                 self.cursor_coordinates.append( self.cursor_position )
             else:
                 self.cursor_coordinates[0] = self.cursor_position
-                    
+
             self.removeItem( self.leave_point )
             self.leave_point = LeavePoint( self )
             self.leave_point.setPos( self.cursor_coordinates[0].x(), self.cursor_coordinates[0].y() )
             self.addItem( self.leave_point )
             self.symbol_drawlist_temp.append( self.leave_point )
-        
+
         elif self.press_number == 0 and self.current_action == "draw_tee_point":
             if len( self.cursor_coordinates ) == 0:
                 self.cursor_coordinates.append( self.cursor_position )
             else:
                 self.cursor_coordinates[0] = self.cursor_position
-                    
+
             self.removeItem( self.tee_point )
             self.tee_point = TeePoint( self )
             self.tee_point.setPos( self.cursor_coordinates[0].x(), self.cursor_coordinates[0].y() )
             self.addItem( self.tee_point )
             self.symbol_drawlist_temp.append( self.tee_point )
-        
+
         elif self.press_number == 0 and self.current_action == "draw_spindle_point":
             if len( self.cursor_coordinates ) == 0:
                 self.cursor_coordinates.append( self.cursor_position )
             else:
                 self.cursor_coordinates[0] = self.cursor_position
-                    
+
             self.removeItem( self.spindle_point )
             self.spindle_point = SpindlePoint( self )
             self.spindle_point.setPos( self.cursor_coordinates[0].x(), self.cursor_coordinates[0].y() )
             self.addItem( self.spindle_point )
             self.symbol_drawlist_temp.append( self.spindle_point )
-                
+
         if self.press_number == 1 and self.current_action == "draw_line":
             if len( self.cursor_coordinates ) == 1:
                 self.cursor_coordinates.append( self.cursor_position )
-                self.line = QGraphicsLineItem( self.cursor_coordinates[0].x(), self.cursor_coordinates[0].y(), 
+                self.line = QGraphicsLineItem( self.cursor_coordinates[0].x(), self.cursor_coordinates[0].y(),
                                                self.cursor_coordinates[1].x(), self.cursor_coordinates[1].y() )
                 self.addItem( self.line )
                 self.symbol_drawlist_temp.append( self.line )
-                                                    
+
             elif len( self.cursor_coordinates ) == 2:
                 self.cursor_coordinates[1] = self.cursor_position
                 self.removeItem( self.line )
-                self.line = QGraphicsLineItem( self.cursor_coordinates[0].x(), self.cursor_coordinates[0].y(), 
+                self.line = QGraphicsLineItem( self.cursor_coordinates[0].x(), self.cursor_coordinates[0].y(),
                                                self.cursor_coordinates[1].x(), self.cursor_coordinates[1].y() )
                 self.addItem( self.line )
                 self.symbol_drawlist_temp.append( self.line )
-            
+
         elif self.press_number == 1 and self.current_action == "draw_rect":
             if len( self.cursor_coordinates ) == 1:
                 self.cursor_coordinates.append( self.cursor_position )
-                                    
+
             elif len( self.cursor_coordinates ) == 2:
                 self.cursor_coordinates[1] = self.cursor_position
                 self.removeItem( self.rect )
-                
+
             if self.cursor_coordinates[0].x() <= self.cursor_coordinates[1].x():
                 pos_x_left = self.cursor_coordinates[0].x()
-                pos_x_right = self.cursor_coordinates[1].x()  
-                
+                pos_x_right = self.cursor_coordinates[1].x()
+
             elif self.cursor_coordinates[0].x() > self.cursor_coordinates[1].x():
                 pos_x_left = self.cursor_coordinates[1].x()
-                pos_x_right = self.cursor_coordinates[0].x()   
-                
+                pos_x_right = self.cursor_coordinates[0].x()
+
             if self.cursor_coordinates[0].y() <= self.cursor_coordinates[1].y():
                 pos_y_bottom = self.cursor_coordinates[1].y()
-                pos_y_top = self.cursor_coordinates[0].y()  
-                
+                pos_y_top = self.cursor_coordinates[0].y()
+
             elif self.cursor_coordinates[0].y() > self.cursor_coordinates[1].y():
                 pos_y_bottom = self.cursor_coordinates[0].y()
-                pos_y_top = self.cursor_coordinates[1].y()  
-            
+                pos_y_top = self.cursor_coordinates[1].y()
+
             rect_width = abs( pos_x_right - pos_x_left )
-            rect_height = abs( pos_y_bottom - pos_y_top )   
-    
-            self.rect = QGraphicsRectItem( pos_x_left, pos_y_top, rect_width, rect_height )  
+            rect_height = abs( pos_y_bottom - pos_y_top )
+
+            self.rect = QGraphicsRectItem( pos_x_left, pos_y_top, rect_width, rect_height )
             self.addItem( self.rect )
-            self.symbol_drawlist_temp.append( self.rect )   
-            
+            self.symbol_drawlist_temp.append( self.rect )
+
         elif self.press_number == 1 and self.current_action == "draw_triangle":
             if self.press_number == 1 and len( self.cursor_coordinates ) == 1:
                 self.cursor_coordinates.append( self.cursor_position )
             elif self.press_number == 1 and len( self.cursor_coordinates ) == 2:
-                self.cursor_coordinates[ self.press_number ] = self.cursor_position    
-            
+                self.cursor_coordinates[ self.press_number ] = self.cursor_position
+
             self.removeItem( self.triangle )
-            polygon = QPolygonF() 
+            polygon = QPolygonF()
             for point in self.cursor_coordinates:
                 polygon.append( point )
-                
-            self.triangle = QGraphicsPolygonItem( polygon )  
+
+            self.triangle = QGraphicsPolygonItem( polygon )
             self.addItem( self.triangle )
-            self.symbol_drawlist_temp.append( self.triangle )   
-            
+            self.symbol_drawlist_temp.append( self.triangle )
+
         elif self.press_number == 2 and self.current_action == "draw_triangle":
             if self.press_number == 2 and len( self.cursor_coordinates ) == 2:
                 self.cursor_coordinates.append( self.cursor_position )
             elif self.press_number == 2 and len( self.cursor_coordinates ) == 3:
                 self.cursor_coordinates[ self.press_number ] = self.cursor_position
-            
+
             self.removeItem( self.triangle )
-            polygon = QPolygonF() 
+            polygon = QPolygonF()
             for point in self.cursor_coordinates:
                 polygon.append( point )
-                
-            self.triangle = QGraphicsPolygonItem( polygon )  
+
+            self.triangle = QGraphicsPolygonItem( polygon )
             self.addItem( self.triangle )
-            self.symbol_drawlist_temp.append( self.triangle )                               
+            self.symbol_drawlist_temp.append( self.triangle )
 
     def draw_arrive_point( self, positions ):
         arrive_point = ArrivePoint( self )
         arrive_point.setPos( self.cursor_coordinates[0].x(), self.cursor_coordinates[0].y() )
-        arrive_point.setFlag( QGraphicsItem.ItemIsSelectable )                                                              
+        arrive_point.setFlag( QGraphicsItem.ItemIsSelectable )
         self.addItem( arrive_point )
         self.symbol_drawlist.append( arrive_point )
-       
+
         self.cursor_coordinates.clear()
         while QApplication.overrideCursor() is not None:
-            QApplication.restoreOverrideCursor()       
-        
+            QApplication.restoreOverrideCursor()
+
     def draw_leave_point( self, positions ):
         leave_point = LeavePoint( self )
         leave_point.setPos( self.cursor_coordinates[0].x(), self.cursor_coordinates[0].y() )
-        leave_point.setFlag( QGraphicsItem.ItemIsSelectable )                                                              
+        leave_point.setFlag( QGraphicsItem.ItemIsSelectable )
         self.addItem( leave_point )
         self.symbol_drawlist.append( leave_point )
-       
+
         self.cursor_coordinates.clear()
         while QApplication.overrideCursor() is not None:
-            QApplication.restoreOverrideCursor()    
-        
+            QApplication.restoreOverrideCursor()
+
     def draw_tee_point( self, positions ):
         tee_point = TeePoint( self )
         tee_point.setPos( self.cursor_coordinates[0].x(), self.cursor_coordinates[0].y() )
-        tee_point.setFlag( QGraphicsItem.ItemIsSelectable )                                                              
+        tee_point.setFlag( QGraphicsItem.ItemIsSelectable )
         self.addItem( tee_point )
         self.symbol_drawlist.append( tee_point )
-       
+
         self.cursor_coordinates.clear()
         while QApplication.overrideCursor() is not None:
-            QApplication.restoreOverrideCursor()  
-        
+            QApplication.restoreOverrideCursor()
+
     def draw_spindle_point( self, positions ):
         spindle_point = SpindlePoint( self )
         spindle_point.setPos( self.cursor_coordinates[0].x(), self.cursor_coordinates[0].y() )
-        spindle_point.setFlag( QGraphicsItem.ItemIsSelectable )                                                              
+        spindle_point.setFlag( QGraphicsItem.ItemIsSelectable )
         self.addItem( spindle_point )
         self.symbol_drawlist.append( spindle_point )
-       
+
         self.cursor_coordinates.clear()
         while QApplication.overrideCursor() is not None:
-            QApplication.restoreOverrideCursor()       
-            
+            QApplication.restoreOverrideCursor()
+
     def draw_line( self, positions ):
         pen_axis_main = QPen( QColor( 0, 0, 0 ) )
         pen_axis_main.setWidth( 2 )
-        pen_axis_main.setStyle( Qt.SolidLine )  
-                                 
-        line = QGraphicsLineItem(   self.cursor_coordinates[0].x(), 
-                                    self.cursor_coordinates[0].y(), 
-                                    self.cursor_coordinates[1].x(), 
+        pen_axis_main.setStyle( Qt.SolidLine )
+
+        line = QGraphicsLineItem(   self.cursor_coordinates[0].x(),
+                                    self.cursor_coordinates[0].y(),
+                                    self.cursor_coordinates[1].x(),
                                     self.cursor_coordinates[1].y() )
         line.setFlag( QGraphicsItem.ItemIsSelectable )
-        line.setPen( pen_axis_main )                                                               
+        line.setPen( pen_axis_main )
         self.addItem( line )
         self.symbol_drawlist.append( line )
-        
+
         self.cursor_coordinates.clear()
         while QApplication.overrideCursor() is not None:
-            QApplication.restoreOverrideCursor()  
-            
+            QApplication.restoreOverrideCursor()
+
     def draw_rect( self, positions ):
         pen_axis_main = QPen( QColor( 0, 0, 0 ) )
         pen_axis_main.setWidth( 2 )
-        pen_axis_main.setStyle( Qt.SolidLine )  
-                                 
+        pen_axis_main.setStyle( Qt.SolidLine )
+
         if self.cursor_coordinates[0].x() < self.cursor_coordinates[1].x():
             pos_x_left = self.cursor_coordinates[0].x()
-            pos_x_right = self.cursor_coordinates[1].x()  
-            
+            pos_x_right = self.cursor_coordinates[1].x()
+
         elif self.cursor_coordinates[0].x() > self.cursor_coordinates[1].x():
             pos_x_left = self.cursor_coordinates[1].x()
-            pos_x_right = self.cursor_coordinates[0].x()   
-            
+            pos_x_right = self.cursor_coordinates[0].x()
+
         if self.cursor_coordinates[0].y() < self.cursor_coordinates[1].y():
             pos_y_bottom = self.cursor_coordinates[1].y()
-            pos_y_top = self.cursor_coordinates[0].y()  
-            
+            pos_y_top = self.cursor_coordinates[0].y()
+
         elif self.cursor_coordinates[0].y() > self.cursor_coordinates[1].y():
             pos_y_bottom = self.cursor_coordinates[0].y()
-            pos_y_top = self.cursor_coordinates[1].y()  
-            
+            pos_y_top = self.cursor_coordinates[1].y()
+
         rect_width = abs( pos_x_right - pos_x_left )
-        rect_height = abs( pos_y_bottom - pos_y_top )   
-        
-        rect = QGraphicsRectItem( pos_x_left, pos_y_top, rect_width, rect_height )  
+        rect_height = abs( pos_y_bottom - pos_y_top )
+
+        rect = QGraphicsRectItem( pos_x_left, pos_y_top, rect_width, rect_height )
         rect.setFlag( QGraphicsItem.ItemIsSelectable )
-        rect.setPen( pen_axis_main )                                                               
+        rect.setPen( pen_axis_main )
         self.addItem( rect )
         self.symbol_drawlist.append( rect )
-        
+
         self.cursor_coordinates.clear()
         while QApplication.overrideCursor() is not None:
-            QApplication.restoreOverrideCursor()    
-            
+            QApplication.restoreOverrideCursor()
+
     def draw_triangle( self, positions ):
         pen_axis_main = QPen( QColor( 0, 0, 0 ) )
         pen_axis_main.setWidth( 2 )
-        pen_axis_main.setStyle( Qt.SolidLine )  
-                                 
-        polygon = QPolygonF() 
+        pen_axis_main.setStyle( Qt.SolidLine )
+
+        polygon = QPolygonF()
         for point in positions:
             polygon.append( point )
-         
-        triangle = QGraphicsPolygonItem( polygon ) 
+
+        triangle = QGraphicsPolygonItem( polygon )
         triangle.setFlag( QGraphicsItem.ItemIsSelectable )
-        triangle.setPen( pen_axis_main )                                                               
+        triangle.setPen( pen_axis_main )
         self.addItem( triangle )
         self.symbol_drawlist.append( triangle )
-        
+
         self.cursor_coordinates.clear()
         while QApplication.overrideCursor() is not None:
-            QApplication.restoreOverrideCursor()  
-    
+            QApplication.restoreOverrideCursor()
+
 class SkeyEditorDialog(QDialog):
     """"SkeyEditorDialog Window"""
-    
+
     def __init__( self, parent = None ):
         QDialog.__init__(self, parent)
         self.skeys = {}
         self.skeysList = []
         self.sheet_width = 400
         self.sheet_height = 400
-        
+
         self.scales = []
 
         self.sheet_units_number_x = 20
         self.sheet_units_number_y = 20
-        
+
         self.origin_x = self.sheet_width / 2
         self.origin_y = self.sheet_height / 2
-        
+
         self.zoom = 1
         self.groups = {}
         self.subgroups = {}
-                
+
         self.max_symbol_size = 0
         self.min_symbol_size = 10000
-        
+
         self.unit_size = 500
- 
+
         self.sheet_limits_gap_x = 5
         self.sheet_limits_gap_y = 5
-                        
+
         self.step_x_main = self.sheet_width / self.sheet_units_number_x
         self.step_x_secondary = self.sheet_width / ( self.sheet_units_number_x * 2 )
-        
+
         self.step_y_main = self.sheet_height / self.sheet_units_number_y
         self.step_y_secondary = self.sheet_height / ( self.sheet_units_number_y * 2 )
-        
+
         self.point_diameter = 15
-               
-        self.iconsLibraryPath = os.path.dirname(os.path.abspath(__file__)).replace( "\lib\omp","\lib\pipecad" ) + "/icons"
-        self.symbol_file_json = os.getenv('PIPECAD_SETTINGS_PATH').replace( "\\\\","\\" ) + "\\iso\\IsoSymbolsLibrary.json" 
-        
+
+        self.iconsLibraryPath = os.path.dirname(os.path.abspath(__file__)).replace(
+            "\lib\omp", "\lib\pipecad"
+        ) + "/icons"
+
+        pipecad_settings_path = os.getenv('PIPECAD_SETTINGS_PATH')
+        if pipecad_settings_path is None:
+            raise RuntimeError("Environment variable 'PIPECAD_SETTINGS_PATH' is not set.")
+        self.symbol_file_json = pipecad_settings_path.replace(
+            "\\\\", "\\"
+        ) + "\\iso\\"
+
         self.skeys_desc = {}
         self.skeys_desc["BU+D"] = ["Bends" , "180° pulled return bend"]
         self.skeys_desc["BUBW"] = ["Bends" , "180° Pulled return bend with weld at each end"]
@@ -995,115 +1021,115 @@ class SkeyEditorDialog(QDialog):
         self.skeys_desc["WW"] = ["Welds" , "Workshop Weld"]
 
         self.setupUi()
-    
+
     def setupUi( self ):
         self.setWindowTitle( QT_TRANSLATE_NOOP( "Paragon", "PipeCAD - Iso Symbols Library" ) )
-        
+
         self.groupSkeys = QGroupBox( QT_TRANSLATE_NOOP( "Paragon", "Skeys" ) )
         self.vBoxLaySkeys = QVBoxLayout()
-        self.groupSkeys.setLayout(self.vBoxLaySkeys)   
-        
-        self.groupEditor = QGroupBox( QT_TRANSLATE_NOOP( "Paragon", "Shape" ) )       
+        self.groupSkeys.setLayout(self.vBoxLaySkeys)
+
+        self.groupEditor = QGroupBox( QT_TRANSLATE_NOOP( "Paragon", "Shape" ) )
         self.hBoxLayEditor = QHBoxLayout()
         self.groupEditor.setLayout(self.hBoxLayEditor)
         self.groupEditor.setMinimumSize( self.sheet_width + 140, self.sheet_height + 100 )
-        
-        self.groupProperties = QGroupBox( QT_TRANSLATE_NOOP( "Paragon", "Properties" ) ) 
+
+        self.groupProperties = QGroupBox( QT_TRANSLATE_NOOP( "Paragon", "Properties" ) )
         self.gridProperties = QGridLayout()
-        self.groupProperties.setLayout(self.gridProperties)   
-        
-        self.groupPreview = QGroupBox( QT_TRANSLATE_NOOP( "Paragon", "Preview" ) ) 
+        self.groupProperties.setLayout(self.gridProperties)
+
+        self.groupPreview = QGroupBox( QT_TRANSLATE_NOOP( "Paragon", "Preview" ) )
         self.vBoxLayPreview = QVBoxLayout()
         self.groupPreview.setLayout( self.vBoxLayPreview )
-        
+
         self.txtSearch = QLineEdit( "" )
-        self.txtSearch.setFixedSize( 470, 24 )  
-        
+        self.txtSearch.setFixedSize( 470, 24 )
+
         self.btnFilterClear = QPushButton( "" )
         self.btnFilterClear.setToolTip( QT_TRANSLATE_NOOP( "Common", "Clear Filter" ) )
         self.btnFilterClear.setIcon( QIcon( os.path.join( self.iconsLibraryPath + '/common/100x100_filter_clear.png' ) ) )
         self.btnFilterClear.setIconSize( QSize( 16, 16 ) )
-        self.btnFilterClear.setMinimumSize( 24, 24 )  
-        self.btnFilterClear.setMaximumSize( 24, 24 )  
-       
+        self.btnFilterClear.setMinimumSize( 24, 24 )
+        self.btnFilterClear.setMaximumSize( 24, 24 )
+
         self.btnPlotSelectElement = QPushButton( "" )
         self.btnPlotSelectElement.setToolTip( QT_TRANSLATE_NOOP( "Paragon", "Select Element" ) )
         self.btnPlotSelectElement.setIcon( QIcon( os.path.join( self.iconsLibraryPath + '/common/128x128_select_element.png' ) ) )
         self.btnPlotSelectElement.setIconSize( QSize( 36, 36 ) )
-        self.btnPlotSelectElement.setMinimumSize( 36, 36 )  
-        self.btnPlotSelectElement.setMaximumSize( 36, 36 )   
-       
+        self.btnPlotSelectElement.setMinimumSize( 36, 36 )
+        self.btnPlotSelectElement.setMaximumSize( 36, 36 )
+
         self.btnPlotPointArrive = QPushButton( "" )
         self.btnPlotPointArrive.setToolTip( QT_TRANSLATE_NOOP( "Paragon", "Draw Arrive Connection Point" ) )
         self.btnPlotPointArrive.setIcon( QIcon( os.path.join( self.iconsLibraryPath + '/paragon/128x128_point_arrive.png' ) ) )
         self.btnPlotPointArrive.setIconSize( QSize( 36, 36 ) )
-        self.btnPlotPointArrive.setMinimumSize( 36, 36 )  
-        self.btnPlotPointArrive.setMaximumSize( 36, 36 )  
-        
+        self.btnPlotPointArrive.setMinimumSize( 36, 36 )
+        self.btnPlotPointArrive.setMaximumSize( 36, 36 )
+
         self.btnPlotPointLeave = QPushButton( "" )
         self.btnPlotPointLeave.setToolTip( QT_TRANSLATE_NOOP( "Paragon", "Draw Leave Connection Point" ) )
         self.btnPlotPointLeave.setIcon( QIcon( os.path.join( self.iconsLibraryPath + '/paragon/128x128_point_leave.png' ) ) )
         self.btnPlotPointLeave.setIconSize( QSize( 36, 36 ) )
-        self.btnPlotPointLeave.setMinimumSize( 36, 36 )  
-        self.btnPlotPointLeave.setMaximumSize( 36, 36 )    
-        
+        self.btnPlotPointLeave.setMinimumSize( 36, 36 )
+        self.btnPlotPointLeave.setMaximumSize( 36, 36 )
+
         self.btnPlotPointTee = QPushButton( "" )
         self.btnPlotPointTee.setToolTip( QT_TRANSLATE_NOOP( "Paragon", "Draw Additional Connection Point" ) )
         self.btnPlotPointTee.setIcon( QIcon( os.path.join( self.iconsLibraryPath + '/paragon/128x128_point_tee.png' ) ) )
         self.btnPlotPointTee.setIconSize( QSize( 36, 36 ) )
-        self.btnPlotPointTee.setMinimumSize( 36, 36 )  
-        self.btnPlotPointTee.setMaximumSize( 36, 36 )  
-        
+        self.btnPlotPointTee.setMinimumSize( 36, 36 )
+        self.btnPlotPointTee.setMaximumSize( 36, 36 )
+
         self.btnPlotPointSpindle = QPushButton( "" )
         self.btnPlotPointSpindle.setToolTip( QT_TRANSLATE_NOOP( "Paragon", "Draw Spindle Connection Point" ) )
         self.btnPlotPointSpindle.setIcon( QIcon( os.path.join( self.iconsLibraryPath + '/paragon/128x128_point_spindle.png' ) ) )
         self.btnPlotPointSpindle.setIconSize( QSize( 36, 36 ) )
-        self.btnPlotPointSpindle.setMinimumSize( 36, 36 )  
-        self.btnPlotPointSpindle.setMaximumSize( 36, 36 )    
-        
+        self.btnPlotPointSpindle.setMinimumSize( 36, 36 )
+        self.btnPlotPointSpindle.setMaximumSize( 36, 36 )
+
         self.btnPlotLine = QPushButton( "" )
         self.btnPlotLine.setToolTip( QT_TRANSLATE_NOOP( "Paragon", "Draw Line" ) )
         self.btnPlotLine.setIcon( QIcon( os.path.join( self.iconsLibraryPath + '/paragon/128x128_line.png' ) ) )
         self.btnPlotLine.setIconSize( QSize( 36, 36 ) )
-        self.btnPlotLine.setMinimumSize( 36, 36 )  
-        self.btnPlotLine.setMaximumSize( 36, 36 )     
-        
+        self.btnPlotLine.setMinimumSize( 36, 36 )
+        self.btnPlotLine.setMaximumSize( 36, 36 )
+
         self.btnPlotRect = QPushButton( "" )
         self.btnPlotRect.setToolTip( QT_TRANSLATE_NOOP( "Paragon", "Draw Rectangle" ) )
         self.btnPlotRect.setIcon( QIcon( os.path.join( self.iconsLibraryPath + '/paragon/128x128_rectangle.png' ) ) )
         self.btnPlotRect.setIconSize( QSize( 36, 36 ) )
-        self.btnPlotRect.setMinimumSize( 36, 36 )  
-        self.btnPlotRect.setMaximumSize( 36, 36 )     
-        
+        self.btnPlotRect.setMinimumSize( 36, 36 )
+        self.btnPlotRect.setMaximumSize( 36, 36 )
+
         self.btnPlotTriangle = QPushButton( "" )
         self.btnPlotTriangle.setToolTip( QT_TRANSLATE_NOOP( "Paragon", "Draw Triangle" ) )
         self.btnPlotTriangle.setIcon( QIcon( os.path.join( self.iconsLibraryPath + '/paragon/128x128_Triangle.png' ) ) )
         self.btnPlotTriangle.setIconSize( QSize( 36, 36 ) )
-        self.btnPlotTriangle.setMinimumSize( 36, 36 )  
-        self.btnPlotTriangle.setMaximumSize( 36, 36 )        
-        
+        self.btnPlotTriangle.setMinimumSize( 36, 36 )
+        self.btnPlotTriangle.setMaximumSize( 36, 36 )
+
         self.btnPlotCap = QPushButton( "" )
         self.btnPlotCap.setToolTip( QT_TRANSLATE_NOOP( "Paragon", "Draw Dish" ) )
         self.btnPlotCap.setIcon( QIcon( os.path.join( self.iconsLibraryPath + '/paragon/128x128_cap.png' ) ) )
         self.btnPlotCap.setIconSize( QSize( 36, 36 ) )
-        self.btnPlotCap.setMinimumSize( 36, 36 )  
-        self.btnPlotCap.setMaximumSize( 36, 36 )  
-        
+        self.btnPlotCap.setMinimumSize( 36, 36 )
+        self.btnPlotCap.setMaximumSize( 36, 36 )
+
         self.btnPlotHexagon = QPushButton( "" )
         self.btnPlotHexagon.setToolTip( QT_TRANSLATE_NOOP( "Paragon", "Draw Hexagone" ) )
         self.btnPlotHexagon.setIcon( QIcon( os.path.join( self.iconsLibraryPath + '/paragon/128x128_hexagon.png' ) ) )
         self.btnPlotHexagon.setIconSize( QSize( 36, 36 ) )
-        self.btnPlotHexagon.setMinimumSize( 36, 36 )  
-        self.btnPlotHexagon.setMaximumSize( 36, 36 )  
-        
+        self.btnPlotHexagon.setMinimumSize( 36, 36 )
+        self.btnPlotHexagon.setMaximumSize( 36, 36 )
+
         self.btnClearSheet = QPushButton( "" )
         self.btnClearSheet.setToolTip( QT_TRANSLATE_NOOP( "Paragon", "Clear Sheet" ) )
         #<a href="https://www.flaticon.com/free-icons/clean" title="clean icons">Clean icons created by Freepik - Flaticon</a>
         self.btnClearSheet.setIcon( QIcon( os.path.join( self.iconsLibraryPath + '/common/128x128_clear_sheet.png' ) ) )
         self.btnClearSheet.setIconSize( QSize( 30, 30 ) )
-        self.btnClearSheet.setMinimumSize( 36, 36 )  
-        self.btnClearSheet.setMaximumSize( 36, 36 )  
-        
+        self.btnClearSheet.setMinimumSize( 36, 36 )
+        self.btnClearSheet.setMaximumSize( 36, 36 )
+
         self.vBoxLayPlotButtons = QVBoxLayout()
         #self.vBoxLayPlotButtons.addWidget(self.btnPlotSelectElement)
         self.vBoxLayPlotButtons.addWidget(self.btnPlotPointArrive)
@@ -1123,66 +1149,66 @@ class SkeyEditorDialog(QDialog):
         self.treeSkeys.setUniformRowHeights(True)
         self.treeSkeys.setContextMenuPolicy(Qt.CustomContextMenu)
         #self.treeSkeys.customContextMenuRequested.connect(self.customContextMenuRequested)
-        
+
         self.treeRoot = QTreeWidgetItem( self.treeSkeys )
         self.treeRoot.setText( 0, QT_TRANSLATE_NOOP( "Paragon", "Components" ) )
         self.treeRoot.setExpanded(True)
 
-        self.treeSkeys.setMinimumSize( 500, 450 )  
-        self.treeSkeys.setMaximumSize( 500, 450 )  
-                 
+        self.treeSkeys.setMinimumSize( 500, 450 )
+        self.treeSkeys.setMaximumSize( 500, 450 )
+
         self.btnImportFromASCII = QPushButton( QT_TRANSLATE_NOOP( "Paragon", "Import from ASCII" ) )
         self.btnImportFromASCII.setToolTip( QT_TRANSLATE_NOOP( "Paragon", "Import of Skeys from ASCII file ( Intergraph )" ) )
-        self.btnImportFromASCII.setMinimumSize( 248, 28 )  
-        self.btnImportFromASCII.setMaximumSize( 248, 28 )   
-        
+        self.btnImportFromASCII.setMinimumSize( 248, 28 )
+        self.btnImportFromASCII.setMaximumSize( 248, 28 )
+
         self.btnImportFromIDF = QPushButton( QT_TRANSLATE_NOOP( "Paragon", "Import from IDF" ) )
         self.btnImportFromIDF.setToolTip( QT_TRANSLATE_NOOP( "Paragon", "Import Skeys from IDF file ( AVEVA )" ) )
-        self.btnImportFromIDF.setMinimumSize( 248, 28 )  
-        self.btnImportFromIDF.setMaximumSize( 248, 28 )  
-        
+        self.btnImportFromIDF.setMinimumSize( 248, 28 )
+        self.btnImportFromIDF.setMaximumSize( 248, 28 )
+
         self.scene = SheetLayout( self )
         self.scene.setSceneRect( - 40, 0, self.sheet_width + 70, self.sheet_height )
-                
+
         self.viewEditor = QGraphicsView( self.scene, self )
         self.viewEditor.setMouseTracking( True )
         self.viewEditor.setRenderHint( QPainter.Antialiasing )
         self.viewEditor.viewport().installEventFilter( self )
-                
+
         self.lblSkey = QLabel( QT_TRANSLATE_NOOP( "Paragon", "Skey" ) )
         self.lblSkey.setMinimumSize( 100, 24 )
         self.lblSkey.setMaximumSize( 100, 24 )
         self.txtSkey = QLineEdit( "" )
         self.txtSkey.setMinimumSize( 250, 24 )
-        self.txtSkey.setMaximumSize( 250, 24 )   
-               
+        self.txtSkey.setMaximumSize( 250, 24 )
+
         self.lblSkeyGroup = QLabel( QT_TRANSLATE_NOOP( "Paragon", "Group" ) )
         self.cbSkeyGroup = QComboBox()
         self.cbSkeyGroup.setMinimumSize( 250, 24 )
         self.cbSkeyGroup.setMaximumSize( 250, 24 )
         self.cbSkeyGroup.setDuplicatesEnabled( False )
-        
-        self.cbSkeyGroup.addItem( " " ) 
-        
+
+        self.cbSkeyGroup.addItem( " " )
+
         self.lblSkeySubgroup = QLabel( QT_TRANSLATE_NOOP( "Paragon", "Subgroup" ) )
         self.cbSkeySubgroup = QComboBox()
         self.cbSkeySubgroup.setMinimumSize( 250, 24 )
         self.cbSkeySubgroup.setMaximumSize( 250, 24 )
-        
-        self.cbSkeySubgroup.addItem( " " ) 
-        
+
+        self.cbSkeySubgroup.addItem( " " )
+
         self.lblSkeyDesc = QLabel( QT_TRANSLATE_NOOP( "Paragon", "Description" ) )
         self.txtSkeyDesc = QLineEdit( "" )
         self.txtSkeyDesc.setMinimumSize( 250, 24 )
         self.txtSkeyDesc.setMaximumSize( 250, 24 )
-        
+
         self.lblSpindleSkey = QLabel( QT_TRANSLATE_NOOP( "Paragon", "Spindle Skey" ) )
         self.lblSpindleSkey.setWordWrap( True )
         self.cbSpindleSkey = QComboBox()
         self.cbSpindleSkey.setMinimumSize( 130, 24 )
         self.cbSpindleSkey.setMaximumSize( 130, 24 )
         self.cbSpindleSkey.setIconSize( QSize( 24, 24 ) )
-        
+
         icon_SP01 = QIcon( os.path.join( self.iconsLibraryPath + '/paragon/spindles/128x128_01SP.png' ) )
         icon_SP02 = QIcon( os.path.join( self.iconsLibraryPath + '/paragon/spindles/128x128_02SP.png' ) )
         icon_SP03 = QIcon( os.path.join( self.iconsLibraryPath + '/paragon/spindles/128x128_03SP.png' ) )
@@ -1199,7 +1225,7 @@ class SkeyEditorDialog(QDialog):
         icon_SP14 = QIcon( os.path.join( self.iconsLibraryPath + '/paragon/spindles/128x128_14SP.png' ) )
         icon_SP15 = QIcon( os.path.join( self.iconsLibraryPath + '/paragon/spindles/128x128_15SP.png' ) )
         icon_SP16 = QIcon( os.path.join( self.iconsLibraryPath + '/paragon/spindles/128x128_16SP.png' ) )
-        
+
         self.cbSpindleSkey.addItem( " " )
         self.cbSpindleSkey.addItem( icon_SP01, "01SP" )
         self.cbSpindleSkey.addItem( icon_SP02, "02SP" )
@@ -1217,11 +1243,11 @@ class SkeyEditorDialog(QDialog):
         self.cbSpindleSkey.addItem( icon_SP14, "14SP" )
         self.cbSpindleSkey.addItem( icon_SP15, "15SP" )
         self.cbSpindleSkey.addItem( icon_SP16, "16SP" )
-        
+
         self.btnSpindleSkeyRotateMinus = QPushButton( "-" )
         self.btnSpindleSkeyRotateMinus.setToolTip( QT_TRANSLATE_NOOP( "Paragon", "Draw Hexagone" ) )
-        self.btnSpindleSkeyRotateMinus.setMinimumSize( 24, 24 )  
-        self.btnSpindleSkeyRotateMinus.setMaximumSize( 24, 24 )   
+        self.btnSpindleSkeyRotateMinus.setMinimumSize( 24, 24 )
+        self.btnSpindleSkeyRotateMinus.setMaximumSize( 24, 24 )
 
         self.txtSpindleSkeyAngle = QLineEdit( "0°" )
         self.txtSpindleSkeyAngle.setAlignment( Qt.AlignCenter )
@@ -1230,66 +1256,66 @@ class SkeyEditorDialog(QDialog):
 
         self.btnSpindleSkeyRotatePlus = QPushButton( "+" )
         self.btnSpindleSkeyRotatePlus.setToolTip( QT_TRANSLATE_NOOP( "Paragon", "Draw Hexagone" ) )
-        self.btnSpindleSkeyRotatePlus.setMinimumSize( 24, 24 )  
-        self.btnSpindleSkeyRotatePlus.setMaximumSize( 24, 24 ) 
-        
+        self.btnSpindleSkeyRotatePlus.setMinimumSize( 24, 24 )
+        self.btnSpindleSkeyRotatePlus.setMaximumSize( 24, 24 )
+
         self.hBoxLaySpindle = QHBoxLayout()
-        self.hBoxLaySpindle.addWidget( self.cbSpindleSkey )   
-        self.hBoxLaySpindle.addStretch()          
-        #self.hBoxLaySpindle.addWidget( self.btnSpindleSkeyRotateMinus )    
-        #self.hBoxLaySpindle.addWidget( self.txtSpindleSkeyAngle )    
-        #self.hBoxLaySpindle.addWidget( self.btnSpindleSkeyRotatePlus )    
- 
+        self.hBoxLaySpindle.addWidget( self.cbSpindleSkey )
+        self.hBoxLaySpindle.addStretch()
+        #self.hBoxLaySpindle.addWidget( self.btnSpindleSkeyRotateMinus )
+        #self.hBoxLaySpindle.addWidget( self.txtSpindleSkeyAngle )
+        #self.hBoxLaySpindle.addWidget( self.btnSpindleSkeyRotatePlus )
+
         self.lblScale = QLabel( QT_TRANSLATE_NOOP( "Paragon", "Scale" ) )
         self.txtScale = QLineEdit( "" )
         self.txtScale.setMinimumSize( 250, 24 )
         self.txtScale.setMaximumSize( 250, 24 )
-        
+
         self.lblOrientation = QLabel( QT_TRANSLATE_NOOP( "Paragon", "Orientation" ) )
         self.cbOrientation = QComboBox()
         self.cbOrientation.setMinimumSize( 250, 24 )
         self.cbOrientation.setMaximumSize( 250, 24 )
-        
+
         self.cbOrientation.addItem( QT_TRANSLATE_NOOP( "Paragon", "Use on symmetrical component" ) )
         self.cbOrientation.addItem( QT_TRANSLATE_NOOP( "Paragon", "Use on non-symmetrical component" ) )
         self.cbOrientation.addItem( QT_TRANSLATE_NOOP( "Paragon", "Use on reducers" ) )
         self.cbOrientation.addItem( QT_TRANSLATE_NOOP( "Paragon", "Use on flanges" ) )
-        
+
         self.lblFlowArrow = QLabel( QT_TRANSLATE_NOOP( "Paragon", "Flow Arrow" ) )
         self.lblFlowArrow.setWordWrap( True )
         self.cbFlowArrow = QComboBox()
         self.cbFlowArrow.setMinimumSize( 250, 24 )
         self.cbFlowArrow.setMaximumSize( 250, 24 )
-        
+
         self.cbFlowArrow.addItem( QT_TRANSLATE_NOOP( "Common", "Default" ) )
         self.cbFlowArrow.addItem( QT_TRANSLATE_NOOP( "Common", "Off" ) )
         self.cbFlowArrow.addItem( QT_TRANSLATE_NOOP( "Common", "On" ) )
-                          
+
         self.lblDimensioned = QLabel( QT_TRANSLATE_NOOP( "Paragon", "Dimensioned" ) )
         self.lblDimensioned.setWordWrap( True )
         self.cbDimensioned = QComboBox()
         self.cbDimensioned.setMinimumSize( 250, 24 )
         self.cbDimensioned.setMaximumSize( 250, 24 )
-        
+
         self.cbDimensioned.addItem( QT_TRANSLATE_NOOP( "Common", "Default" ) )
         self.cbDimensioned.addItem( QT_TRANSLATE_NOOP( "Common", "Off" ) )
         self.cbDimensioned.addItem( QT_TRANSLATE_NOOP( "Common", "On" ) )
-        
+
         self.scenePreview = QGraphicsScene( self )
         self.scenePreview.setSceneRect( 0, 0, 150, 170 )
-                
+
         self.viewPreview = QGraphicsView( self.scenePreview, self )
         self.viewPreview.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.viewPreview.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.viewPreview.setRenderHint(QPainter.Antialiasing)
 
         self.vBoxLayPreview.addWidget( self.viewPreview )
-        
+
         self.btnSave = QPushButton( QT_TRANSLATE_NOOP( "Common", "Save Changes to Skey File" ) )
         self.btnSave.setToolTip( QT_TRANSLATE_NOOP( "Common", "Save Changes to Skey File" ) )
-        self.btnSave.setMinimumSize( 337, 24 ) 
-        self.btnSave.setMaximumSize( 337, 24 ) 
-        
+        self.btnSave.setMinimumSize( 337, 24 )
+        self.btnSave.setMaximumSize( 337, 24 )
+
         self.gridProperties.addWidget( self.lblSkey, 0, 0 )
         self.gridProperties.addWidget( self.txtSkey, 0, 1 )
         self.gridProperties.addWidget( self.lblSkeyGroup, 1, 0 )
@@ -1313,40 +1339,40 @@ class SkeyEditorDialog(QDialog):
 
         self.gridProperties.setRowStretch( self.gridProperties.rowCount(), 1)
         self.gridProperties.setColumnStretch( self.gridProperties.columnCount(), 1)
-        
+
         self.hBoxLayFilter = QHBoxLayout()
         self.hBoxLayFilter.addWidget(self.txtSearch)
         self.hBoxLayFilter.addWidget(self.btnFilterClear)
-        
+
         self.vBoxLaySkeys.addLayout(self.hBoxLayFilter)
         self.vBoxLaySkeys.addWidget(self.treeSkeys)
-        
+
         self.hBoxLayImportButtons = QHBoxLayout()
         self.hBoxLayImportButtons.addWidget( self.btnImportFromASCII )
         self.hBoxLayImportButtons.addWidget( self.btnImportFromIDF )
         self.vBoxLaySkeys.addLayout( self.hBoxLayImportButtons )
         self.vBoxLaySkeys.addStretch()
-        
+
         self.hBoxLayMain = QHBoxLayout( self )
         self.hBoxLayMain.addWidget(self.groupSkeys)
         self.hBoxLayMain.addWidget(self.groupEditor)
         self.hBoxLayMain.addWidget(self.groupProperties)
-        
+
         #TODO: self.hBoxLayEditor.addLayout(self.vBoxLayPlotButtons)
         self.hBoxLayEditor.addWidget(self.viewEditor)
         self.hBoxLayEditor.addStretch()
-        
+
         self.vBoxLayMain = QVBoxLayout( self )
         self.vBoxLayMain.addLayout(self.hBoxLayMain)
-        
+
         self.treeSkeys.itemSelectionChanged.connect(self.currentSkeyChanged)
         self.btnImportFromASCII.clicked.connect(self.callImportSkeyFromASCII)
         self.btnImportFromIDF.clicked.connect(self.callImportSkeyFromIDF)
-        
+
         self.cbSkeyGroup.currentTextChanged.connect(self.currentSkeyGroupChanged)
         self.txtSearch.textChanged.connect(self.callFilter)
         self.btnFilterClear.clicked.connect(self.callFilterClear)
-        
+
         self.btnPlotSelectElement.clicked.connect(self.callDrawSelectElement)
         self.btnPlotPointArrive.clicked.connect(self.callDrawArrivePoint)
         self.btnPlotPointLeave.clicked.connect(self.callDrawLeavePoint)
@@ -1359,62 +1385,62 @@ class SkeyEditorDialog(QDialog):
         self.btnSpindleSkeyRotateMinus.clicked.connect(self.callSpindleAngleChangeMinus)
         self.btnSpindleSkeyRotatePlus.clicked.connect(self.callSpindleAngleChangePlus)
         self.btnSave.clicked.connect(self.callSave)
-        
+
         self.scene.focusItemChanged.connect(self.focusItemChanged)
-                
+
         self.groupPreview.setEnabled( False )
         self.btnPlotSelectElement.setEnabled( False )
-                
+
         file_exists = os.path.isfile( self.symbol_file_json )
         if file_exists:
             self.callLoadFromJson()
             self.callLoadSkeyTree()
         #self.callReadSkeyASCIIFile()
         #self.callSaveToJson()
-        
+
     def callSpindleAngleChangeMinus( self ):
         self.txtSpindleSkeyAngle.text = str( int( self.txtSpindleSkeyAngle.text[:len( self.txtSpindleSkeyAngle.text ) - 1] ) - 1 ) + "°"
-        
+
     def callSpindleAngleChangePlus( self ):
         self.txtSpindleSkeyAngle.text = str( int( self.txtSpindleSkeyAngle.text[:len( self.txtSpindleSkeyAngle.text ) - 1] ) + 1 ) + "°"
-    
+
     def callDrawSelectElement( self ):
         print( "select element" )
-            
-    
+
+
     def focusItemChanged(self, newItem, oldItem, reason):
         if newItem and reason == Qt.MouseFocusReason:
             print('item {} clicked!'.format(newItem))
-            
+
     def callClearSheet( self ):
         for item in self.scene.symbol_drawlist:
             self.scene.removeItem( item )
- 
+
     def callDrawArrivePoint( self ):
         QApplication.restoreOverrideCursor()
         QApplication.setOverrideCursor(QCursor(Qt.CrossCursor))
         self.scene.current_action = "draw_arrive_point"
-      
+
     def callDrawLeavePoint( self ):
         QApplication.restoreOverrideCursor()
         QApplication.setOverrideCursor(QCursor(Qt.CrossCursor))
         self.scene.current_action = "draw_leave_point"
-            
+
     def callDrawTeePoint( self ):
         QApplication.restoreOverrideCursor()
         QApplication.setOverrideCursor(QCursor(Qt.CrossCursor))
-        self.scene.current_action  = "draw_tee_point"   
-        
+        self.scene.current_action  = "draw_tee_point"
+
     def callDrawSpindlePoint( self ):
         QApplication.restoreOverrideCursor()
         QApplication.setOverrideCursor(QCursor(Qt.CrossCursor))
         self.scene.current_action  = "draw_spindle_point"
-            
+
     def callDrawLine( self ):
         QApplication.restoreOverrideCursor()
         QApplication.setOverrideCursor(QCursor(Qt.CrossCursor))
         self.scene.current_action = "draw_line"
-                
+
     def callDrawRectangle( self ):
         QApplication.restoreOverrideCursor()
         QApplication.setOverrideCursor(QCursor(Qt.CrossCursor))
@@ -1431,15 +1457,15 @@ class SkeyEditorDialog(QDialog):
         self.treeRoot = QTreeWidgetItem( self.treeSkeys )
         self.treeRoot.setText( 0, QT_TRANSLATE_NOOP( "Paragon", "Components" ) )
         self.treeRoot.setExpanded( True )
-        
+
         check_value = self.txtSearch.text.upper()
         temp_skey_group = {}
-        
+
         if self.groups != {}:
             for skey_group in self.groups.keys():
                 for skey_subgroup in self.groups[ skey_group ].keys():
                     for skey in self.groups[ skey_group ][ skey_subgroup ]:
-                        if skey.upper().find( check_value ) > - 1 or skey_subgroup.upper().find( check_value ) > - 1 or skey_group.upper().find( check_value ) > - 1: 
+                        if skey.upper().find( check_value ) > - 1 or skey_subgroup.upper().find( check_value ) > - 1 or skey_group.upper().find( check_value ) > - 1:
                             if skey_group in temp_skey_group.keys():
                                 if skey_subgroup in temp_skey_group[skey_group].keys():
                                     temp_skey_group[skey_group][skey_subgroup].append(skey)
@@ -1450,7 +1476,7 @@ class SkeyEditorDialog(QDialog):
                                 temp_skey_group[skey_group] = {}
                                 temp_skey_group[skey_group][skey_subgroup] = []
                                 temp_skey_group[skey_group][skey_subgroup].append(skey)
-                            
+
             for skey_group in temp_skey_group.keys():
                 group_level = QTreeWidgetItem( self.treeRoot )
                 group_level.setExpanded(True)
@@ -1459,7 +1485,7 @@ class SkeyEditorDialog(QDialog):
                 if aIcon.availableSizes() == ():
                     aIcon = QIcon( ":/PipeCad/Resources/MISC.png" )
                 group_level.setIcon(0, aIcon )
-            
+
                 for skey_subgroup in temp_skey_group[ skey_group ].keys():
                     subgroup_level = QTreeWidgetItem( group_level )
                     subgroup_level.setExpanded(True)
@@ -1475,11 +1501,11 @@ class SkeyEditorDialog(QDialog):
     def callFilterClear( self ):
         self.treeSkeys.clear()
         self.txtSearch.clear()
-        
+
         self.treeRoot = QTreeWidgetItem( self.treeSkeys )
         self.treeRoot.setText( 0, QT_TRANSLATE_NOOP( "Paragon", "Components" ) )
         self.treeRoot.setExpanded(True)
-        
+
         for skey_group in self.groups.keys():
             group_level = QTreeWidgetItem( self.treeRoot )
             group_level.setExpanded(False)
@@ -1488,7 +1514,7 @@ class SkeyEditorDialog(QDialog):
             if aIcon.availableSizes() == ():
                 aIcon = QIcon( ":/PipeCad/Resources/MISC.png" )
             group_level.setIcon(0, aIcon )
-                
+
             for skey_subgroup in self.groups[ skey_group ].keys():
                 subgroup_level = QTreeWidgetItem( group_level )
                 subgroup_level.setExpanded( False )
@@ -1498,7 +1524,7 @@ class SkeyEditorDialog(QDialog):
                     skey_level.setText( 0, skey )
                 subgroup_level.sortChildren( 0, Qt.AscendingOrder )
         group_level.sortChildren( 0, Qt.AscendingOrder )
-                
+
     def currentSkeyGroupChanged( self ):
         self.cbSkeySubgroup.clear()
         self.cbSkeySubgroup.addItem( " " )
@@ -1511,11 +1537,11 @@ class SkeyEditorDialog(QDialog):
         self.callClearSheet()
         self.scene.set_grid_center = "Center"
         self.scene.symbol_drawlist = []
-        
+
         self.cbSkeyGroup.setCurrentText( " " )
         self.cbSkeySubgroup.setCurrentText( " " )
         self.txtScale.text = " "
-        
+
         current_level_element = self.treeSkeys.currentItem()
         current_level = 0
         for i in range( 0, 3 ):
@@ -1523,31 +1549,31 @@ class SkeyEditorDialog(QDialog):
                 current_level_element = current_level_element.parent()
                 current_level = current_level + 1
 
-        if current_level == 3: 
+        if current_level == 3:
             selected_skey = self.treeSkeys.currentItem().text(0)
             selected_group = self.skeys[ selected_skey ][ "group" ]
             selected_subgroup = self.skeys[ selected_skey ][ "subgroup" ]
-            
+
             self.txtSkey.text = selected_skey
             self.txtSkeyDesc.text = self.skeys[ selected_skey ][ "description" ]
-            
+
             self.cbSkeyGroup.setCurrentText( selected_group )
             self.cbSkeySubgroup.clear()
             for subgroup in self.groups[ selected_group ].keys():
                 self.cbSkeySubgroup.addItem( subgroup )
-               
+
             self.cbSkeySubgroup.model().sort(0)
-            self.cbSkeySubgroup.setCurrentText( selected_subgroup )  
-    
+            self.cbSkeySubgroup.setCurrentText( selected_subgroup )
+
             if self.skeys[ selected_skey ]["spindle_skey"] == "":
-                self.cbSpindleSkey.setCurrentText( " " )  
-            else: 
-                self.cbSpindleSkey.setCurrentText( self.skeys[ selected_skey ]["spindle_skey"] ) 
-                
+                self.cbSpindleSkey.setCurrentText( " " )
+            else:
+                self.cbSpindleSkey.setCurrentText( self.skeys[ selected_skey ]["spindle_skey"] )
+
             self.txtScale.text = self.skeys[ selected_skey ]["scale_factor"]
-            self.cbOrientation.setCurrentIndex( self.skeys[ selected_skey ]["orientation"]  ) 
-            self.cbFlowArrow.setCurrentIndex( self.skeys[ selected_skey ]["flow_arrow"]  ) 
-            self.cbDimensioned.setCurrentIndex( self.skeys[ selected_skey ]["dimensioned"]  ) 
+            self.cbOrientation.setCurrentIndex( self.skeys[ selected_skey ]["orientation"]  )
+            self.cbFlowArrow.setCurrentIndex( self.skeys[ selected_skey ]["flow_arrow"]  )
+            self.cbDimensioned.setCurrentIndex( self.skeys[ selected_skey ]["dimensioned"]  )
             for item in self.skeys[ selected_skey ]["geometry"]:
                 if item.split(":")[0] == "ArrivePoint":
                     x0 = round( float( item.split(":")[1].split(" ")[1].split("=")[1] ), 3 ) * 100.0 + self.origin_x
@@ -1594,14 +1620,14 @@ class SkeyEditorDialog(QDialog):
                     self.scene.addItem( element )
                     self.scene.symbol_drawlist.append( element )
 
-                
-                #    
+
+                #
                 #    self.skeys[ self.txtSkey.text ]["geometry"].append( "Line: x1=" + str( x1 ) + " y1=" + str( y1 ) + " x2=" + str( x2 ) + " y2=" + str( y2 ) )
                 #elif type( item ) == QGraphicsRectItem:
-                #    #x = round ( ( item.rect().x() - self.scene.sheet_width / 2 ) / self.scene.step_x / 20 , 2 ) 
+                #    #x = round ( ( item.rect().x() - self.scene.sheet_width / 2 ) / self.scene.step_x / 20 , 2 )
                 #    #y = round ( ( item.rect().y() - self.scene.sheet_height / 2 ) / self.scene.step_y / 20 , 2 )
                 #    x = self.scene.convert_to_relative_position( QPointF( item.rect().x(), item.rect().y() ) ).x()
-                #    y = self.scene.convert_to_relative_position( QPointF( item.rect().x(), item.rect().y() ) ).y() 
+                #    y = self.scene.convert_to_relative_position( QPointF( item.rect().x(), item.rect().y() ) ).y()
                 #    width = round ( item.rect().width() / self.scene.step_x / 20 , 2 )
                 #    height = round ( item.rect().height() / self.scene.step_x / 20 , 2 )
                 #    self.skeys[ self.txtSkey.text ]["geometry"].append(  "Rectangle: x0=" + str( x ) + " y0=" + str( y ) + " width=" + str( width ) + "Height=" + str( height ) )
@@ -1609,14 +1635,14 @@ class SkeyEditorDialog(QDialog):
                 #    polygon_geometry = ""
                 #    index = 1
                 #    for point in item.polygon().toList():
-                #        #point_x = round ( ( point.x() - self.scene.sheet_width / 2 ) / self.scene.step_x / 20 , 2 ) 
+                #        #point_x = round ( ( point.x() - self.scene.sheet_width / 2 ) / self.scene.step_x / 20 , 2 )
                 #        #point_y = round ( ( point.y() - self.scene.sheet_height / 2 ) / self.scene.step_y / 20 , 2 )
                 #        point_x = self.scene.convert_to_relative_position( point ).x()
                 #        point_y = self.scene.convert_to_relative_position( point ).y()
-                #        polygon_geometry = polygon_geometry + " x" + str( index ) + "=" + str( point_x ) + " y" + str( index ) + "=" + str( point_y )  
+                #        polygon_geometry = polygon_geometry + " x" + str( index ) + "=" + str( point_x ) + " y" + str( index ) + "=" + str( point_y )
                 #        index = index + 1
                 #
-                    
+
     def callConvertGraphics( self, skey, scale_factor, geometry ):
         start_point_x = ""
         start_point_y = ""
@@ -1631,39 +1657,39 @@ class SkeyEditorDialog(QDialog):
         max_height = 1
         min_width = 10000
         min_height = 10000
-        point_arrive = False 
-        point_leave = False 
+        point_arrive = False
+        point_leave = False
 
         pen_arrive = QPen( QColor( 51, 51, 255 ) )
         pen_arrive.setWidth( 2 )
-        pen_arrive.setStyle( Qt.SolidLine )   
-        
+        pen_arrive.setStyle( Qt.SolidLine )
+
         brush_arrive = QBrush( QColor( 51, 51, 255 ) )
 
         pen_leave = QPen( QColor( 255, 0, 0 ) )
         pen_leave.setWidth( 2 )
-        pen_leave.setStyle( Qt.SolidLine )   
+        pen_leave.setStyle( Qt.SolidLine )
 
         brush_leave = QBrush( QColor( 255, 0, 0 ) )
-        
+
         pen_tee = QPen( Qt.magenta )
         pen_tee.setWidth( 2 )
-        pen_tee.setStyle( Qt.SolidLine )   
+        pen_tee.setStyle( Qt.SolidLine )
 
         brush_tee = QBrush( Qt.magenta )
-        
+
         pen_spindle = QPen( QColor( 111, 0, 0 ) )
         pen_spindle.setWidth( 2 )
         pen_spindle.setStyle( Qt.SolidLine )
 
-        brush_spindle = QBrush( QColor( 111, 0, 0 ) )     
+        brush_spindle = QBrush( QColor( 111, 0, 0 ) )
 
         pen_symbol = QPen( QColor( 26, 26, 26 ) )
         pen_symbol.setWidth( 2 )
-        pen_symbol.setStyle( Qt.SolidLine )   
-                
+        pen_symbol.setStyle( Qt.SolidLine )
+
         self.scene.set_grid_center()
-        
+
         for x in range( 0, len( geometry ), 3 ):
             if geometry[x] == "1":
                 start_point_x = float( geometry[x + 1] )
@@ -1672,7 +1698,7 @@ class SkeyEditorDialog(QDialog):
                 min_height = min( start_point_y, min_height  )
                 max_width = max( start_point_x, max_width  )
                 max_height = max( start_point_y, max_height  )
-                
+
             elif geometry[x] == "2":
                 end_point_x = float( geometry[x + 1] )
                 end_point_y = float( geometry[x + 2] )
@@ -1680,7 +1706,7 @@ class SkeyEditorDialog(QDialog):
                 min_height = min( end_point_y, min_height  )
                 max_width = max( end_point_x, max_width  )
                 max_height = max( end_point_y, max_height  )
-                
+
             elif geometry[x] == "3":
                 start_point_x = float( geometry[x + 1] )
                 start_point_y = float( geometry[x + 2] )
@@ -1688,7 +1714,7 @@ class SkeyEditorDialog(QDialog):
                 min_height = min( start_point_y, min_height  )
                 max_width = max( start_point_x, max_width  )
                 max_height = max( start_point_y, max_height  )
-                
+
             elif geometry[x] == "6":
                 start_point_x = float( geometry[x + 1] )
                 start_point_y = float( geometry[x + 2] )
@@ -1696,25 +1722,25 @@ class SkeyEditorDialog(QDialog):
                 min_height = min( start_point_y, min_height  )
                 max_width = max( start_point_x, max_width  )
                 max_height = max( start_point_y, max_height  )
-                
+
         min_size = min( ( max_width - min_width ) * scale_factor, ( max_height - min_height ) * scale_factor )
         max_size = max( ( max_width - min_width ) * scale_factor, ( max_height - min_height ) * scale_factor )
-        
+
         if max_size <= self.unit_size:
             scale = scale_factor / 5
-        else: 
+        else:
             scale = self.unit_size / max_size * scale_factor / 5
-                    
+
         symbol_width = max_width * scale
-        symbol_height = max_height * scale    
-       
+        symbol_height = max_height * scale
+
         index_of_end_geometry = 0
         for x in range( 0, len(geometry), 3 ):
             if geometry[x] == "0":
                 index_of_end_geometry =  x
                 break
-            
-        for x in range( 0, len( geometry ), 3 ):                    
+
+        for x in range( 0, len( geometry ), 3 ):
             if geometry[x] == "1":
                 start_point_x = round( float( geometry[x + 1] ) * scale - symbol_width / 2, 0 ) / 100.0
                 start_point_y = round( float( geometry[x + 2] ) * scale - symbol_height / 2 , 0 ) / 100.0
@@ -1727,50 +1753,50 @@ class SkeyEditorDialog(QDialog):
                 elif x == ( len(geometry) - 3 ) or x == ( index_of_end_geometry - 3 ):
                     if "SP" not in skey:
                         new_geometry.append( "LeavePoint: x0=" + str( start_point_x ) + " y0=" + str( start_point_y ) )
-          
+
             elif geometry[x] == "2":
                 end_point_x = round( float( geometry[x + 1] ) * scale - symbol_width / 2 , 0 ) / 100.0
                 end_point_y = round( float( geometry[x + 2] ) * scale - symbol_height / 2, 0 ) / 100.0
                 new_geometry.append( "Line: x1=" + str( start_point_x ) + " y1=" + str( start_point_y ) + " x2=" + str( end_point_x ) + " y2=" + str( end_point_y ) )
                 start_point_x = end_point_x
                 start_point_y = end_point_y
-                
+
             elif geometry[x] == "3":
                 end_point_x = round( float( geometry[x + 1] ) * scale - symbol_width / 2, 0 ) / 100.0
                 end_point_y = round( float( geometry[x + 2] ) * scale - symbol_height / 2 , 0 ) / 100.0
                 new_geometry.append( "TeePoint: x0=" + str( end_point_x ) + " y0=" + str( end_point_y ) )
                 start_point_x = end_point_x
                 start_point_y = end_point_y
-            
-            elif geometry[x] == "6": 
-                end_point_x = round( float( geometry[x + 1] ) * scale - symbol_width / 2, 0 ) / 100.0 
+
+            elif geometry[x] == "6":
+                end_point_x = round( float( geometry[x + 1] ) * scale - symbol_width / 2, 0 ) / 100.0
                 end_point_y = round( float( geometry[x + 2] ) * scale - symbol_height / 2, 0 ) / 100.0
                 new_geometry.append( "SpindlePoint: x0=" + str( end_point_x ) + " y0=" + str( end_point_y ) )
                 start_point_x = end_point_x
                 start_point_y = end_point_y
-        
+
         #unique_elements = list( pd.unique( new_geometry ) )
         #return unique_elements
         return new_geometry
-        
+
     def callLoadSkeyTree( self ):
-        
+
         self.callLoadSkeyGroups()
-        
+
         self.treeSkeys.clear()
 
         self.treeRoot = QTreeWidgetItem( self.treeSkeys )
         self.treeRoot.setText( 0, QT_TRANSLATE_NOOP( "Paragon", "Components" ) )
         self.treeRoot.setExpanded( True )
-        
+
         self.cbSkeyGroup.clear()
         for group in self.groups:
             self.cbSkeyGroup.addItem( group )
-          
+
         self.cbSkeyGroup.model().sort(0)
         self.cbSkeyGroup.setCurrentText( "Unknown" )
         self.cbSkeySubgroup.setCurrentText( "Unknown" )
-        
+
         for skey_group in self.groups.keys():
             group_level = QTreeWidgetItem( self.treeRoot )
             group_level.setText( 0, skey_group )
@@ -1778,7 +1804,7 @@ class SkeyEditorDialog(QDialog):
             if aIcon.availableSizes() == ():
                 aIcon = QIcon( ":/PipeCad/Resources/MISC.png" )
             group_level.setIcon(0, aIcon )
-            
+
             for skey_subgroup in self.groups[ skey_group ].keys():
                 subgroup_level = QTreeWidgetItem( group_level )
                 subgroup_level.setText( 0, skey_subgroup )
@@ -1787,109 +1813,109 @@ class SkeyEditorDialog(QDialog):
                     skey_level.setText( 0, skey )
                 subgroup_level.sortChildren( 0, Qt.AscendingOrder )
             group_level.sortChildren( 0, Qt.AscendingOrder )
-        
-        
+
+
     def callSave( self ):
         if self.txtSkey.text not in self.skeys.keys():
             self.skeys[ self.txtSkey.text ] = { }
-            
-        self.skeys[ self.txtSkey.text ] = { "group": self.cbSkeyGroup.currentText, 
-                                                "subgroup": self.cbSkeySubgroup.currentText, 
-                                                "description": self.txtSkeyDesc.text, 
-                                                "spindle_skey": self.cbSpindleSkey.currentText, 
-                                                "scale_factor": 1.0, 
-                                                "orientation": self.cbOrientation.currentIndex, 
-                                                "flow_arrow": self.cbFlowArrow.currentIndex, 
-                                                "dimensioned": self.cbDimensioned.currentIndex, 
+
+        self.skeys[ self.txtSkey.text ] = { "group": self.cbSkeyGroup.currentText,
+                                                "subgroup": self.cbSkeySubgroup.currentText,
+                                                "description": self.txtSkeyDesc.text,
+                                                "spindle_skey": self.cbSpindleSkey.currentText,
+                                                "scale_factor": 1.0,
+                                                "orientation": self.cbOrientation.currentIndex,
+                                                "flow_arrow": self.cbFlowArrow.currentIndex,
+                                                "dimensioned": self.cbDimensioned.currentIndex,
                                                 "geometry": []  }
         for item in self.scene.symbol_drawlist:
             if type( item ) == ArrivePoint:
                 arrive_point_x0 = ( item.x() - self.scene.origin_x ) / 100.0
-                arrive_point_y0 = - ( item.y() - self.scene.origin_y ) / 100.0   
+                arrive_point_y0 = - ( item.y() - self.scene.origin_y ) / 100.0
                 print( item.x(), item.y(), arrive_point_x0, arrive_point_y0 )
                 #self.skeys[ self.txtSkey.text ]["geometry"].append( "ArrivePoint: x0=" + str( arrive_point_x0 ) + " y0=" + str( arrive_point_y0 ) )
-                
+
             elif type( item ) == LeavePoint:
                 leave_point_x0 = ( item.x() - self.scene.origin_x ) / 100.0
-                leave_point_y0 = - ( item.y() - self.scene.origin_y ) / 100.0       
+                leave_point_y0 = - ( item.y() - self.scene.origin_y ) / 100.0
                 #self.skeys[ self.txtSkey.text ]["geometry"].append( "LeavePoint: x0=" + str( leave_point_x0 ) + " y0=" + str( leave_point_y0 ) )
-                
+
             elif type( item ) == TeePoint:
                 tee_point_x0 = ( item.x() - self.scene.origin_x ) / 100.0
-                tee_point_y0 = - ( item.y() - self.scene.origin_y ) / 100.0      
+                tee_point_y0 = - ( item.y() - self.scene.origin_y ) / 100.0
                 #self.skeys[ self.txtSkey.text ]["geometry"].append( "TeePoint: x0=" + str( tee_point_x0 ) + " y0=" + str( tee_point_y0 ) )
-                
+
             elif type( item ) == SpindlePoint:
                 spindle_point_x0 = ( item.x() - self.scene.origin_x ) / 100.0
-                spindle_point_y0 = - ( item.y() - self.scene.origin_y ) / 100.0        
+                spindle_point_y0 = - ( item.y() - self.scene.origin_y ) / 100.0
                 #self.skeys[ self.txtSkey.text ]["geometry"].append( "SpindlePoint: x0=" + str( spindle_point_x0 ) + " y0=" + str( spindle_point_y0 ) )
-                
+
             elif type( item ) == QGraphicsLineItem:
                 line_x1 = ( item.line().p1().x() - self.scene.origin_x ) / 100.0
-                line_y1 = - ( self.scene.origin_y - item.line().p1().y() ) / 100.0 
+                line_y1 = - ( self.scene.origin_y - item.line().p1().y() ) / 100.0
                 line_x2 = ( item.line().p2().x() - self.scene.origin_x ) / 100.0
-                line_y2 = - ( self.scene.origin_y - item.line().p2().y() ) / 100.0 
+                line_y2 = - ( self.scene.origin_y - item.line().p2().y() ) / 100.0
                 #self.skeys[ self.txtSkey.text ]["geometry"].append( "Line: x1=" + str( line_x1 ) + " y1=" + str( line_y1 ) + " x2=" + str( line_x2 ) + " y2=" + str( line_y2 ) )
-                
+
             elif type( item ) == QGraphicsRectItem:
                 rect_x = self.scene.convert_to_relative_position( QPointF( item.rect().x(), item.rect().y() ) ).x()
-                rect_y = self.scene.convert_to_relative_position( QPointF( item.rect().x(), item.rect().y() ) ).y() 
+                rect_y = self.scene.convert_to_relative_position( QPointF( item.rect().x(), item.rect().y() ) ).y()
                 rect_width = round ( item.rect().width() / self.scene.step_x / 20 , 2 )
                 rect_height = round ( item.rect().height() / self.scene.step_x / 20 , 2 )
                 #self.skeys[ self.txtSkey.text ]["geometry"].append(  "Rectangle: x0=" + str( rect_x ) + " y0=" + str( rect_y ) + " width=" + str( rect_width ) + "Height=" + str( rect_height ) )
-                
+
             elif type( item ) == QGraphicsPolygonItem:
                 polygon_geometry = ""
                 index = 1
                 for point in item.polygon().toList():
                     point_x = self.scene.convert_to_relative_position( point ).x()
                     point_y = self.scene.convert_to_relative_position( point ).y()
-                    polygon_geometry = polygon_geometry + " x" + str( index ) + "=" + str( point_x ) + " y" + str( index ) + "=" + str( point_y )  
+                    polygon_geometry = polygon_geometry + " x" + str( index ) + "=" + str( point_x ) + " y" + str( index ) + "=" + str( point_y )
                     index = index + 1
                 #self.skeys[ self.txtSkey.text ]["geometry"].append(  "Polyline: " + polygon_geometry )
-        
-        self.callSaveToJson()    
-        self.callLoadSkeyTree()        
 
-    def callSaveToJson( self ):        
+        self.callSaveToJson()
+        self.callLoadSkeyTree()
+
+    def callSaveToJson( self ):
         json_object = json.dumps( self.skeys, indent = 4 )
         with open( os.getenv('PIPECAD_SETTINGS_PATH').replace( "\\\\","\\" ) + "\\iso\\IsoSymbolsLibrary.json", "w" ) as outfile:
             outfile.write( json_object )
-            
-    def callLoadFromJson( self ):        
+
+    def callLoadFromJson( self ):
         with open( self.symbol_file_json ) as json_file:
             self.skeys = json.load( json_file )
-    
+
     def callLoadSkeyGroups( self ):
         groups = {}
-        
+
         for skey in self.skeys.keys():
             skey_group = self.skeys[ skey ][ "group" ]
             skey_subgroup = self.skeys[ skey ][ "subgroup" ]
             if skey_group not in groups.keys():
                 groups[ skey_group ] = {}
                 groups[ skey_group ][ skey_subgroup ] = []
-                groups[ skey_group ][ skey_subgroup ].append( skey ) 
+                groups[ skey_group ][ skey_subgroup ].append( skey )
             else:
                 if skey_subgroup not in groups[ skey_group ].keys():
                     groups[ skey_group ][ skey_subgroup ] = []
-                    groups[ skey_group ][ skey_subgroup ].append( skey ) 
+                    groups[ skey_group ][ skey_subgroup ].append( skey )
                 else:
                     if skey not in groups[ skey_group ][ skey_subgroup ]:
-                        groups[ skey_group ][ skey_subgroup ].append( skey ) 
-        
+                        groups[ skey_group ][ skey_subgroup ].append( skey )
+
         for key in sorted( groups ):
             self.groups[ key ] = groups[ key ]
-        
+
     def callSelectFileUsingExplorer( self, extension ):
         sFilePath = QFileDialog.getOpenFileName( self, QT_TRANSLATE_NOOP( "Paragon", "Select File" ), "C:\\", "Symbols file (*." + extension +")" )
         if sFilePath != "":
             return sFilePath.replace("/","\\")
-    
+
     def callImportSkeyFromASCII( self ):
         symbol_file_path = self.callSelectFileUsingExplorer( "skey" )
         if symbol_file_path == None:
-            return 
+            return
         symbol_file = open( symbol_file_path , 'r' )
         contents = symbol_file.readlines()
         skip_line = False
@@ -1899,101 +1925,101 @@ class SkeyEditorDialog(QDialog):
         groups = {}
 
         max_value = 0
-                
+
         i = -1
         for line_index in range( len(contents) ):
-            row = contents[line_index]              
-            
+            row = contents[line_index]
+
             if row[:1] == "!":
                 skip_line = True
                 continue
-            
+
             record_type = row[:4].strip()
-            
+
             if record_type == "501":
                 if  new_skey != "" or  base_skey != "":
-                    if new_skey != "": 
+                    if new_skey != "":
                         self.skeys[ new_skey ]["geometry"] = self.callConvertGraphics( new_skey, scale_factor, geometry )
-                          
-                    elif new_skey == "" and base_skey != "": 
+
+                    elif new_skey == "" and base_skey != "":
                         self.skeys[ base_skey ]["geometry"] = self.callConvertGraphics( base_skey, scale_factor, geometry )
 
                 geometry.clear()
-                
+
                 skip_line = False
                 description = ""
                 skey_group = "Unknown"
                 skey_subgroup = "Unknown"
-                
+
                 new_skey = row[5:10].strip()
                 base_skey = row[11:15].strip()
-                
+
                 spindle_skey = row[16:20].strip()
-                scale_factor = float( row[21:29].strip() ) / 100          
+                scale_factor = float( row[21:29].strip() ) / 100
                 orientation = int( row[30:37].strip() )
-                flow_arrow = int( row[38:45].strip() )  
-                dimensioned = int( row[46:53].strip() )                
-            
-                if new_skey == "": 
+                flow_arrow = int( row[38:45].strip() )
+                dimensioned = int( row[46:53].strip() )
+
+                if new_skey == "":
                     if base_skey in self.skeys_desc.keys():
                         skey_group = self.skeys_desc[base_skey][0]
-                        skey_subgroup = self.skeys_desc[base_skey][1]                            
+                        skey_subgroup = self.skeys_desc[base_skey][1]
                         if skey_group not in groups.keys():
                             groups[ skey_group ] = {}
                             groups[ skey_group ][ skey_subgroup ] = []
-                            groups[ skey_group ][ skey_subgroup ].append( base_skey ) 
+                            groups[ skey_group ][ skey_subgroup ].append( base_skey )
                         else:
                             if skey_subgroup not in groups[ skey_group].keys():
                                 groups[ skey_group ][ skey_subgroup ] = []
-                                groups[ skey_group ][ skey_subgroup ].append( base_skey ) 
+                                groups[ skey_group ][ skey_subgroup ].append( base_skey )
                             else:
                                 if base_skey not in groups[ skey_group ][ skey_subgroup ]:
-                                    groups[ skey_group ][ skey_subgroup ].append( base_skey ) 
+                                    groups[ skey_group ][ skey_subgroup ].append( base_skey )
                     else:
                         if skey_group not in groups.keys():
                             groups[ skey_group ] = {}
                             groups[ skey_group ][ skey_subgroup ] = []
-                            groups[ skey_group ][ skey_subgroup ].append( base_skey ) 
+                            groups[ skey_group ][ skey_subgroup ].append( base_skey )
                         else:
                             if skey_subgroup not in groups[ skey_group].keys():
                                 groups[ skey_group ][ skey_subgroup ] = []
-                                groups[ skey_group ][ skey_subgroup ].append( base_skey ) 
+                                groups[ skey_group ][ skey_subgroup ].append( base_skey )
                             else:
                                 if base_skey not in groups[ skey_group ][ skey_subgroup ]:
-                                    groups[ skey_group ][ skey_subgroup ].append( base_skey )                             
+                                    groups[ skey_group ][ skey_subgroup ].append( base_skey )
                     self.skeys[ base_skey ] = { "group":skey_group, "subgroup":skey_subgroup, "description": description, "spindle_skey": spindle_skey, "scale_factor": scale_factor, "orientation": orientation, "flow_arrow": flow_arrow, "dimensioned": dimensioned, "geometry": geometry  }
-                    
+
                 else:
                     if skey_group not in groups.keys():
                         groups[ skey_group ] = {}
                         groups[ skey_group ][ skey_subgroup ] = []
-                        groups[ skey_group ][ skey_subgroup ].append( new_skey ) 
+                        groups[ skey_group ][ skey_subgroup ].append( new_skey )
                     else:
                         if skey_subgroup not in groups[ skey_group].keys():
                             groups[ skey_group ][ skey_subgroup ] = []
-                            groups[ skey_group ][ skey_subgroup ].append( new_skey ) 
+                            groups[ skey_group ][ skey_subgroup ].append( new_skey )
                         else:
                             if new_skey not in groups[ skey_group ][ skey_subgroup ]:
-                                groups[ skey_group ][ skey_subgroup ].append( new_skey ) 
-                            
+                                groups[ skey_group ][ skey_subgroup ].append( new_skey )
+
                     self.skeys[ new_skey ] = { "group":skey_group, "subgroup":skey_subgroup, "description": description, "spindle_skey": spindle_skey, "scale_factor": scale_factor, "orientation": orientation, "flow_arrow": flow_arrow, "dimensioned": dimensioned, "geometry": geometry  }
 
-            elif record_type == "502":  
+            elif record_type == "502":
                 if skip_line == True:
                     continue
-                    
+
                 pen_action_1 = row[5:14].strip()
-                pos_x_1 = float( row[15:22].strip() ) 
+                pos_x_1 = float( row[15:22].strip() )
                 pos_y_1 = float( row[23:30].strip() )
-                
+
                 pen_action_2 = row[31:38].strip()
                 pos_x_2 = float( row[39:46].strip() )
                 pos_y_2 = float( row[47:54].strip() )
-                
+
                 pen_action_3 = row[55:63].strip()
                 pos_x_3 = float( row[64:70].strip() )
                 pos_y_3 = float( row[71:78].strip() )
-                
+
                 pen_action_4 = row[79:86].strip()
                 pos_x_4 = float( row[87:94].strip() )
                 pos_y_4 = float( row[95:103].strip() )
@@ -2010,27 +2036,27 @@ class SkeyEditorDialog(QDialog):
                 geometry.append( pen_action_4 )
                 geometry.append( pos_x_4 )
                 geometry.append( pos_y_4 )
-                
+
                 if line_index == len(contents) - 1:
-                    if new_skey != "": 
+                    if new_skey != "":
                         self.skeys[ new_skey ]["geometry"] = self.callConvertGraphics( new_skey, scale_factor, geometry )
-                    elif new_skey == "" and base_skey != "": 
+                    elif new_skey == "" and base_skey != "":
                         self.skeys[ base_skey ]["geometry"] = self.callConvertGraphics( base_skey, scale_factor, geometry )
                     geometry.clear()
-     
+
         for key in sorted( groups ):
             self.groups[ key ] = groups[ key ]
-        
+
         self.callSaveToJson()
-        self.callLoadSkeyTree()   
-        
+        self.callLoadSkeyTree()
+
     def callImportSkeyFromIDF( self ):
-        
+
         self.groups.clear()
-        
+
         symbol_file_path = self.callSelectFileUsingExplorer( "idf" )
         if symbol_file_path == None:
-            return 
+            return
         symbol_file = open( symbol_file_path , 'r' )
         contents = symbol_file.readlines()
         skip_line = False
@@ -2040,28 +2066,28 @@ class SkeyEditorDialog(QDialog):
         groups = {}
 
         max_value = 0
-                
+
         i = -1
         for line_index in range( len(contents) ):
-            row = contents[line_index]              
-            
+            row = contents[line_index]
+
             if row[:1] == "!":
                 skip_line = True
                 continue
-            
+
             record_type = row[:5].strip()
-            
+
             if record_type == "501":
                 if  new_skey != "" or  base_skey != "":
-                    if new_skey != "": 
+                    if new_skey != "":
                         self.skeys[ new_skey ]["geometry"] = self.callConvertGraphics( new_skey, scale_factor, geometry )
-                          
-                    elif new_skey == "" and base_skey != "": 
+
+                    elif new_skey == "" and base_skey != "":
                         self.skeys[ base_skey ]["geometry"] = self.callConvertGraphics( base_skey, scale_factor, geometry )
                 if new_skey == "FEFL":
                     print( geometry, self.skeys[ new_skey ]["geometry"])
                 geometry.clear()
-                
+
                 skip_line = False
                 description = ""
                 skey_group = "Unknown"
@@ -2069,74 +2095,74 @@ class SkeyEditorDialog(QDialog):
                 new_skey = row[5:21].strip().split(",")[0]
                 base_skey = row[5:21].strip().split(",")[1]
                 spindle_skey = row[5:21].strip().split(",")[2]
-                scale_factor = float( row[22:29].strip() ) / 100          
+                scale_factor = float( row[22:29].strip() ) / 100
                 orientation = int( row[30:37].strip() )
-                flow_arrow = int( row[38:45].strip() )  
-                dimensioned = int( row[46:53].strip() )                
-   
-                
-                if new_skey == "": 
+                flow_arrow = int( row[38:45].strip() )
+                dimensioned = int( row[46:53].strip() )
+
+
+                if new_skey == "":
                     if base_skey in self.skeys_desc.keys():
                         skey_group = self.skeys_desc[base_skey][0]
                         skey_subgroup = self.skeys_desc[base_skey][1]
                         if skey_group not in groups.keys():
                             groups[ skey_group ] = {}
                             groups[ skey_group ][ skey_subgroup ] = []
-                            groups[ skey_group ][ skey_subgroup ].append( base_skey ) 
+                            groups[ skey_group ][ skey_subgroup ].append( base_skey )
                         else:
                             if skey_subgroup not in groups[ skey_group].keys():
                                 groups[ skey_group ][ skey_subgroup ] = []
-                                groups[ skey_group ][ skey_subgroup ].append( base_skey ) 
+                                groups[ skey_group ][ skey_subgroup ].append( base_skey )
                             else:
                                 if base_skey not in groups[ skey_group ][ skey_subgroup ]:
-                                    groups[ skey_group ][ skey_subgroup ].append( base_skey ) 
+                                    groups[ skey_group ][ skey_subgroup ].append( base_skey )
                     else:
                         skey_group = "Unknown"
                         skey_subgroup = "Unknown"
                         if skey_group not in groups.keys():
                             groups[ skey_group ] = {}
                             groups[ skey_group ][ skey_subgroup ] = []
-                            groups[ skey_group ][ skey_subgroup ].append( base_skey ) 
+                            groups[ skey_group ][ skey_subgroup ].append( base_skey )
                         else:
                             if skey_subgroup not in groups[ skey_group].keys():
                                 groups[ skey_group ][ skey_subgroup ] = []
-                                groups[ skey_group ][ skey_subgroup ].append( base_skey ) 
+                                groups[ skey_group ][ skey_subgroup ].append( base_skey )
                             else:
                                 if base_skey not in groups[ skey_group ][ skey_subgroup ]:
-                                    groups[ skey_group ][ skey_subgroup ].append( base_skey ) 
-                                
+                                    groups[ skey_group ][ skey_subgroup ].append( base_skey )
+
                     self.skeys[ base_skey ] = { "group":skey_group, "subgroup":skey_subgroup, "description": description, "spindle_skey": spindle_skey, "scale_factor": scale_factor, "orientation": orientation, "flow_arrow": flow_arrow, "dimensioned": dimensioned, "geometry": geometry  }
                 else:
                     if skey_group not in groups.keys():
                         groups[ skey_group ] = {}
                         groups[ skey_group ][ skey_subgroup ] = []
-                        groups[ skey_group ][ skey_subgroup ].append( new_skey ) 
+                        groups[ skey_group ][ skey_subgroup ].append( new_skey )
                     else:
                         if skey_subgroup not in groups[ skey_group].keys():
                             groups[ skey_group ][ skey_subgroup ] = []
-                            groups[ skey_group ][ skey_subgroup ].append( new_skey ) 
+                            groups[ skey_group ][ skey_subgroup ].append( new_skey )
                         else:
                             if new_skey not in groups[ skey_group ][ skey_subgroup ]:
-                                groups[ skey_group ][ skey_subgroup ].append( new_skey ) 
-                            
+                                groups[ skey_group ][ skey_subgroup ].append( new_skey )
+
                     self.skeys[ new_skey ] = { "group":skey_group, "subgroup":skey_subgroup, "description": description, "spindle_skey": spindle_skey, "scale_factor": scale_factor, "orientation": orientation, "flow_arrow": flow_arrow, "dimensioned": dimensioned, "geometry": geometry  }
-                    
-            elif record_type == "502":  
+
+            elif record_type == "502":
                 if skip_line == True:
                     continue
-                    
+
                 pen_action_1 = row[5:14].strip()
-                pos_x_1 = float( row[15:22].strip() ) 
+                pos_x_1 = float( row[15:22].strip() )
                 pos_y_1 = float( row[23:30].strip() )
-                
+
                 pen_action_2 = row[31:38].strip()
                 pos_x_2 = float( row[39:46].strip() )
                 pos_y_2 = float( row[47:54].strip() )
-                
+
                 pen_action_3 = row[55:63].strip()
                 pos_x_3 = float( row[64:70].strip() )
                 pos_y_3 = float( row[71:78].strip() )
-                
+
                 pen_action_4 = row[79:86].strip()
                 pos_x_4 = float( row[87:94].strip() )
                 pos_y_4 = float( row[95:103].strip() )
@@ -2153,36 +2179,36 @@ class SkeyEditorDialog(QDialog):
                 geometry.append( pen_action_4 )
                 geometry.append( pos_x_4 )
                 geometry.append( pos_y_4 )
-                
+
                 if line_index == len(contents) - 1:
-                    if new_skey != "": 
+                    if new_skey != "":
                         self.skeys[ new_skey ]["geometry"] = self.callConvertGraphics( new_skey, scale_factor, geometry )
-                    elif new_skey == "" and base_skey != "": 
+                    elif new_skey == "" and base_skey != "":
                         self.skeys[ base_skey ]["geometry"] = self.callConvertGraphics( base_skey, scale_factor, geometry )
                     geometry.clear()
             else:
                 if  new_skey != "" or base_skey != "":
-                    if new_skey != "" and self.skeys[ new_skey ]["geometry"] != []: 
+                    if new_skey != "" and self.skeys[ new_skey ]["geometry"] != []:
                         self.skeys[ new_skey ]["geometry"] = self.callConvertGraphics( new_skey, scale_factor, geometry )
-                          
-                    elif new_skey == "" and base_skey != "" and self.skeys[ new_skey ]["geometry"] != []: 
+
+                    elif new_skey == "" and base_skey != "" and self.skeys[ new_skey ]["geometry"] != []:
                         self.skeys[ base_skey ]["geometry"] = self.callConvertGraphics( base_skey, scale_factor, geometry )
 
                     geometry.clear()
-                    new_skey = "" 
+                    new_skey = ""
                     base_skey = ""
                 else:
                     pass
-                
+
         for key in sorted( groups ):
             self.groups[ key ] = groups[ key ]
-            
+
         self.callLoadSkeyTree()
-    
+
 # Singleton Instance.
 aSkeyEditorDialog = SkeyEditorDialog(PipeCad)
 
 def show():
     aSkeyEditorDialog.show()
-    
-        
+
+
