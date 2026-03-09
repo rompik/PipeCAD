@@ -1,0 +1,8 @@
+{
+  "python.analysis.extraPaths": [
+    "./lib"
+  ],
+  "python.analysis.diagnosticSeverityOverrides": {
+    "reportMissingImports": "none"
+  }
+}

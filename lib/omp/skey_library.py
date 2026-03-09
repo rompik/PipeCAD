@@ -2,17 +2,71 @@ import omp
 import json
 import os
 
-from PythonQt.QtGui import (
-    QGraphicsScene, QGraphicsLineItem, QGraphicsRectItem, QGraphicsEllipseItem,
-    QGraphicsPolygonItem, QPolygonF, QGraphicsItem, QColor, QPen, QBrush,
-    QGraphicsSimpleTextItem, QApplication, QDialog, QGroupBox, QVBoxLayout, QHBoxLayout, QIcon,
-    QTreeWidgetItem, QPushButton, QCursor, QFileDialog
-)
+try:
+    from PythonQt.QtGui import (
+        QGraphicsScene, QGraphicsLineItem, QGraphicsRectItem, QGraphicsEllipseItem,
+        QGraphicsPolygonItem, QPolygonF, QGraphicsItem, QColor, QPen, QBrush,
+        QGraphicsSimpleTextItem, QGraphicsView, QPainter,
+        QApplication, QDialog, QGroupBox, QVBoxLayout, QHBoxLayout, QGridLayout,
+        QIcon, QTreeWidget, QTreeWidgetItem, QPushButton, QCursor, QFileDialog,
+        QLabel, QLineEdit, QComboBox
+    )
 
+    from PythonQt.QtCore import QRectF, Qt, QPoint, QPointF, QSize
+except ImportError:
+    # Lightweight stubs for static analysis outside the PipeCAD runtime.
+    class _QtStubObject(object):
+        def __init__(self, *args, **kwargs):
+            pass
 
-from PythonQt.QtCore import QRectF, Qt, QPoint, QPointF, QSize
+        def __getattr__(self, _name):
+            def _noop(*args, **kwargs):
+                return self
+            return _noop
+
+    class Qt(object):
+        SolidLine = 0
+        magenta = 0
+
+    QGraphicsScene = _QtStubObject
+    QGraphicsLineItem = _QtStubObject
+    QGraphicsRectItem = _QtStubObject
+    QGraphicsEllipseItem = _QtStubObject
+    QGraphicsPolygonItem = _QtStubObject
+    QPolygonF = _QtStubObject
+    QGraphicsItem = _QtStubObject
+    QColor = _QtStubObject
+    QPen = _QtStubObject
+    QBrush = _QtStubObject
+    QGraphicsSimpleTextItem = _QtStubObject
+    QGraphicsView = _QtStubObject
+    QPainter = _QtStubObject
+    QApplication = _QtStubObject
+    QDialog = _QtStubObject
+    QGroupBox = _QtStubObject
+    QVBoxLayout = _QtStubObject
+    QHBoxLayout = _QtStubObject
+    QGridLayout = _QtStubObject
+    QIcon = _QtStubObject
+    QTreeWidget = _QtStubObject
+    QTreeWidgetItem = _QtStubObject
+    QPushButton = _QtStubObject
+    QCursor = _QtStubObject
+    QFileDialog = _QtStubObject
+    QLabel = _QtStubObject
+    QLineEdit = _QtStubObject
+    QComboBox = _QtStubObject
+    QRectF = _QtStubObject
+    QPoint = _QtStubObject
+    QPointF = _QtStubObject
+    QSize = _QtStubObject
 
 from pipecad import *
+
+try:
+    PipeCad
+except NameError:
+    PipeCad = None
 
 class ArrivePoint( QGraphicsEllipseItem ) :
     def __init__( self, parent = None ):
