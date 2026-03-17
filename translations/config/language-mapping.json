@@ -1,0 +1,113 @@
+{
+  "version": "1.0",
+  "description": "Language code mappings and metadata for PipeCAD translations",
+  "languages": {
+    "en": {
+      "name": "English",
+      "native_name": "English",
+      "locale": "en_US",
+      "qt_locale": "en_US",
+      "iso_639_1": "en",
+      "iso_639_2": "eng",
+      "is_source": true,
+      "text_direction": "ltr",
+      "plurals": 2
+    },
+    "ru": {
+      "name": "Russian",
+      "native_name": "Русский",
+      "locale": "ru_RU",
+      "qt_locale": "ru_RU",
+      "iso_639_1": "ru",
+      "iso_639_2": "rus",
+      "is_source": false,
+      "text_direction": "ltr",
+      "plurals": 3,
+      "reviewers": ["translation-team@example.com"]
+    },
+    "zh": {
+      "name": "Chinese (Simplified)",
+      "native_name": "简体中文",
+      "locale": "zh_CN",
+      "qt_locale": "zh_CN",
+      "iso_639_1": "zh",
+      "iso_639_2": "zho",
+      "is_source": false,
+      "text_direction": "ltr",
+      "plurals": 1,
+      "reviewers": ["translation-team@example.com"]
+    },
+    "de": {
+      "name": "German",
+      "native_name": "Deutsch",
+      "locale": "de_DE",
+      "qt_locale": "de_DE",
+      "iso_639_1": "de",
+      "iso_639_2": "deu",
+      "is_source": false,
+      "text_direction": "ltr",
+      "plurals": 2,
+      "status": "planned"
+    },
+    "fr": {
+      "name": "French",
+      "native_name": "Français",
+      "locale": "fr_FR",
+      "qt_locale": "fr_FR",
+      "iso_639_1": "fr",
+      "iso_639_2": "fra",
+      "is_source": false,
+      "text_direction": "ltr",
+      "plurals": 2,
+      "status": "planned"
+    },
+    "ja": {
+      "name": "Japanese",
+      "native_name": "日本語",
+      "locale": "ja_JP",
+      "qt_locale": "ja_JP",
+      "iso_639_1": "ja",
+      "iso_639_2": "jpn",
+      "is_source": false,
+      "text_direction": "ltr",
+      "plurals": 1,
+      "status": "planned"
+    },
+    "es": {
+      "name": "Spanish",
+      "native_name": "Español",
+      "locale": "es_ES",
+      "qt_locale": "es_ES",
+      "iso_639_1": "es",
+      "iso_639_2": "spa",
+      "is_source": false,
+      "text_direction": "ltr",
+      "plurals": 2,
+      "status": "planned"
+    },
+    "pt": {
+      "name": "Portuguese (Brazil)",
+      "native_name": "Português (Brasil)",
+      "locale": "pt_BR",
+      "qt_locale": "pt_BR",
+      "iso_639_1": "pt",
+      "iso_639_2": "por",
+      "is_source": false,
+      "text_direction": "ltr",
+      "plurals": 2,
+      "status": "planned"
+    },
+    "ko": {
+      "name": "Korean",
+      "native_name": "한국어",
+      "locale": "ko_KR",
+      "qt_locale": "ko_KR",
+      "iso_639_1": "ko",
+      "iso_639_2": "kor",
+      "is_source": false,
+      "text_direction": "ltr",
+      "plurals": 1,
+      "status": "planned"
+    }
+  }
+}

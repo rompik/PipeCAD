@@ -1,0 +1,33 @@
+{
+  "language": "ru",
+  "language_name": "Russian",
+  "last_updated": "2026-03-10T00:00:00Z",
+  "statistics": {
+    "ui_strings": {
+      "total": 0,
+      "translated": 0,
+      "unfinished": 0,
+      "fuzzy": 0,
+      "percentage": 0
+    },
+    "documentation": {
+      "total_files": 0,
+      "translated_files": 0,
+      "percentage": 0
+    }
+  },
+  "quality": {
+    "automated_score": 0.0,
+    "review_status": "pending",
+    "last_reviewed": null,
+    "reviewer": null
+  },
+  "source_version": {
+    "commit": "",
+    "date": ""
+  },
+  "translation_method": "automated",
+  "requires_review": true,
+  "issues": [],
+  "notes": "Initial setup - awaiting first translation run"
+}

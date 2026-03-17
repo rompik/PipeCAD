@@ -1,0 +1,216 @@
+{
+  "version": "1.0",
+  "last_updated": "2026-03-10",
+  "description": "Technical terms glossary for PipeCAD translation consistency",
+  "terms": [
+    {
+      "source": "PipeCAD",
+      "translations": {
+        "ru": "PipeCAD",
+        "zh": "PipeCAD",
+        "de": "PipeCAD",
+        "fr": "PipeCAD"
+      },
+      "do_not_translate": true,
+      "category": "product_name"
+    },
+    {
+      "source": "piping",
+      "translations": {
+        "ru": "трубопроводы",
+        "zh": "管道",
+        "de": "Rohrleitungen",
+        "fr": "tuyauterie"
+      },
+      "category": "technical"
+    },
+    {
+      "source": "isometric",
+      "translations": {
+        "ru": "изометрический",
+        "zh": "等轴测",
+        "de": "isometrisch",
+        "fr": "isométrique"
+      },
+      "category": "technical"
+    },
+    {
+      "source": "equipment",
+      "translations": {
+        "ru": "оборудование",
+        "zh": "设备",
+        "de": "Ausrüstung",
+        "fr": "équipement"
+      },
+      "category": "technical"
+    },
+    {
+      "source": "structure",
+      "translations": {
+        "ru": "структура",
+        "zh": "结构",
+        "de": "Struktur",
+        "fr": "structure"
+      },
+      "category": "technical"
+    },
+    {
+      "source": "toolbar",
+      "translations": {
+        "ru": "панель инструментов",
+        "zh": "工具栏",
+        "de": "Symbolleiste",
+        "fr": "barre d'outils"
+      },
+      "category": "ui"
+    },
+    {
+      "source": "ribbon",
+      "translations": {
+        "ru": "лента",
+        "zh": "功能区",
+        "de": "Menüband",
+        "fr": "ruban"
+      },
+      "category": "ui"
+    },
+    {
+      "source": "MDB",
+      "translations": {
+        "ru": "МБД",
+        "zh": "MDB",
+        "de": "MDB",
+        "fr": "MDB"
+      },
+      "do_not_translate": false,
+      "category": "acronym",
+      "note": "Model Database"
+    },
+    {
+      "source": "PCF",
+      "translations": {
+        "ru": "PCF",
+        "zh": "PCF",
+        "de": "PCF",
+        "fr": "PCF"
+      },
+      "do_not_translate": true,
+      "category": "file_format",
+      "note": "Piping Component File"
+    },
+    {
+      "source": "IDF",
+      "translations": {
+        "ru": "IDF",
+        "zh": "IDF",
+        "de": "IDF",
+        "fr": "IDF"
+      },
+      "do_not_translate": true,
+      "category": "file_format",
+      "note": "Isometric Data File"
+    },
+    {
+      "source": "PDMS",
+      "translations": {
+        "ru": "PDMS",
+        "zh": "PDMS",
+        "de": "PDMS",
+        "fr": "PDMS"
+      },
+      "do_not_translate": true,
+      "category": "product_name",
+      "note": "Plant Design Management System"
+    },
+    {
+      "source": "nozzle",
+      "translations": {
+        "ru": "штуцер",
+        "zh": "接管",
+        "de": "Stutzen",
+        "fr": "embout"
+      },
+      "category": "technical"
+    },
+    {
+      "source": "vessel",
+      "translations": {
+        "ru": "сосуд",
+        "zh": "容器",
+        "de": "Behälter",
+        "fr": "réservoir"
+      },
+      "category": "technical"
+    },
+    {
+      "source": "exchanger",
+      "translations": {
+        "ru": "теплообменник",
+        "zh": "换热器",
+        "de": "Wärmetauscher",
+        "fr": "échangeur"
+      },
+      "category": "technical"
+    },
+    {
+      "source": "pump",
+      "translations": {
+        "ru": "насос",
+        "zh": "泵",
+        "de": "Pumpe",
+        "fr": "pompe"
+      },
+      "category": "technical"
+    },
+    {
+      "source": "specification",
+      "translations": {
+        "ru": "спецификация",
+        "zh": "规范",
+        "de": "Spezifikation",
+        "fr": "spécification"
+      },
+      "category": "technical"
+    },
+    {
+      "source": "catalogue",
+      "translations": {
+        "ru": "каталог",
+        "zh": "目录",
+        "de": "Katalog",
+        "fr": "catalogue"
+      },
+      "category": "technical"
+    },
+    {
+      "source": "bolt",
+      "translations": {
+        "ru": "болт",
+        "zh": "螺栓",
+        "de": "Schraube",
+        "fr": "boulon"
+      },
+      "category": "technical"
+    },
+    {
+      "source": "flange",
+      "translations": {
+        "ru": "фланец",
+        "zh": "法兰",
+        "de": "Flansch",
+        "fr": "bride"
+      },
+      "category": "technical"
+    },
+    {
+      "source": "grid",
+      "translations": {
+        "ru": "сетка",
+        "zh": "网格",
+        "de": "Gitter",
+        "fr": "grille"
+      },
+      "category": "technical"
+    }
+  ]
+}

@@ -1,0 +1,125 @@
+{
+  "translation_service": {
+    "provider": "google",
+    "alternatives": ["deepl", "azure", "custom"],
+    "api_key_env": "TRANSLATION_API_KEY",
+    "endpoint": "https://translation.googleapis.com/language/translate/v2",
+    "rate_limit": {
+      "requests_per_minute": 100,
+      "characters_per_request": 5000
+    }
+  },
+  "source_language": {
+    "code": "en",
+    "name": "English",
+    "locale": "en_US"
+  },
+  "target_languages": [
+    {
+      "code": "ru",
+      "name": "Russian",
+      "locale": "ru_RU",
+      "enabled": true,
+      "auto_translate": true,
+      "requires_review": true
+    },
+    {
+      "code": "zh",
+      "name": "Chinese (Simplified)",
+      "locale": "zh_CN",
+      "enabled": true,
+      "auto_translate": true,
+      "requires_review": true
+    },
+    {
+      "code": "de",
+      "name": "German",
+      "locale": "de_DE",
+      "enabled": false,
+      "auto_translate": true,
+      "requires_review": true
+    },
+    {
+      "code": "fr",
+      "name": "French",
+      "locale": "fr_FR",
+      "enabled": false,
+      "auto_translate": true,
+      "requires_review": true
+    },
+    {
+      "code": "ja",
+      "name": "Japanese",
+      "locale": "ja_JP",
+      "enabled": false,
+      "auto_translate": true,
+      "requires_review": true
+    },
+    {
+      "code": "es",
+      "name": "Spanish",
+      "locale": "es_ES",
+      "enabled": false,
+      "auto_translate": true,
+      "requires_review": true
+    }
+  ],
+  "content_types": {
+    "ui_strings": {
+      "format": "qt_ts",
+      "source_dir": "source/ui",
+      "target_dir_template": "targets/{lang}/ui",
+      "file_pattern": "pipecad_{lang}.ts",
+      "preserve_placeholders": true,
+      "preserve_html": true
+    },
+    "documentation": {
+      "format": "markdown",
+      "source_dir": "../docs/en",
+      "target_dir_template": "../docs/{lang}",
+      "file_pattern": "**/*.md",
+      "preserve_code_blocks": true,
+      "preserve_links": true
+    }
+  },
+  "quality_settings": {
+    "min_confidence_score": 0.8,
+    "flag_for_review_threshold": 0.85,
+    "max_length_variance": 1.5,
+    "preserve_patterns": [
+      "\\{[0-9]+\\}",
+      "\\%[sd]",
+      "<[^>]+>",
+      "\\[.*?\\]\\(.*?\\)"
+    ]
+  },
+  "translation_memory": {
+    "enabled": true,
+    "database": "config/translation-memory.json",
+    "fuzzy_matching": true,
+    "fuzzy_threshold": 0.9
+  },
+  "glossary": {
+    "enabled": true,
+    "file": "config/glossary.json",
+    "enforce": true,
+    "case_sensitive": false
+  },
+  "post_processing": {
+    "trim_whitespace": true,
+    "normalize_linebreaks": true,
+    "validate_format": true,
+    "update_status": true
+  },
+  "notifications": {
+    "email": {
+      "enabled": false,
+      "recipients": ["localization-team@example.com"],
+      "events": ["translation_complete", "validation_failed"]
+    },
+    "webhook": {
+      "enabled": false,
+      "url": "https://example.com/webhook/translation"
+    }
+  }
+}
