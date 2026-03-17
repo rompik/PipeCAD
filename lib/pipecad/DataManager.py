@@ -20,10 +20,10 @@ from PythonQt.QtCore import *
 from PythonQt.QtGui import *
 from pipecad import *
 
-class DataManager(QWidget):
+class DataManager(QDialog):
     """docstring for DataManager"""
     def __init__(self, parent = None):
-        QWidget.__init__(self, parent)
+        QDialog.__init__(self, parent)
         self.setupUi()
 
     def setupUi(self):
@@ -117,3 +117,14 @@ class DataManager(QWidget):
             except Exception as e:
                 print(e)
                 QMessageBox.critical(self, QT_TRANSLATE_NOOP("DataManager", "Error"), str(e))
+
+# Singleton Instance.
+aDataManager = DataManager(PipeCad)
+
+def show():
+    aDataManager.show()
+
+def showDataManager():
+    show()
+
+
