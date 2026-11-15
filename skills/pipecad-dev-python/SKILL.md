@@ -33,7 +33,7 @@ metadata:
 
 - **属性值**：用 `DbElement.GetAsString/GetBool/GetDouble/GetInteger` 等直接取；写值用 `SetAttribute(DbAttribute, 值)`，重载覆盖 string/int/double/bool/DbElement/DbElement[]/Position/Orientation/Direction 等。
 
-所有属性的名称，类型及描述请查看 `data/Attribute.md` 。所有元素类型、包含的属性及层级关系请查看 `data/ElementType.md`。
+所有属性的名称，类型及描述请查看 `data/MetaData.json` 中的 `Attributes`，所有元素类型、包含的属性及层级关系请查看 `data/MetaData.json`中的 `Types`。
 
 ## 任务模式
 
@@ -142,7 +142,7 @@ ce = DbElement.Current
 
 ### 4. 创建元素
 
-通过 `DbElement.Create(index, type)` 来创建成员元素。其中 `index` 参数为创建的新元素在成员元素中的位置。当 `index` 小于等于1时，新元素位于第一个；当 `index` 大于成员元素个数时，新元素位于最后一个。第二个参数为元素类型，使用大写字符串，并且使用元素类型的简称。元素类型简称请参考： `data/ElementType.md` 。
+通过 `DbElement.Create(index, type)` 来创建成员元素。其中 `index` 参数为创建的新元素在成员元素中的位置。当 `index` 小于等于1时，新元素位于第一个；当 `index` 大于成员元素个数时，新元素位于最后一个。第二个参数为元素类型，使用大写字符串，并且使用元素类型的简称 `ShortName`，元素类型简称请参考： `data/MetaData.json` 。
 
 ```py
 from PipeCAD.Database import *
@@ -180,7 +180,7 @@ ce.Delete()
 + 使用 `GetAttribute()/SetAttribute()`；
 + 直接使用对象属性名称来查询和设值；
 
-优先使用对象属性的方式来读写属性，其中属性的名称必须是在 `data/Attribute.md` 中。
+优先使用对象属性的方式来读写属性，其中属性的名称必须是在 `data/MetaData.json` 中 `Attributes` 每个属性的 `QueryText`，大驼峰风格的属性名称。
 
 ```py
 from PipeCAD.Database import *
