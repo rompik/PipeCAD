@@ -17,7 +17,7 @@ metadata:
    | 领域 | 命名空间 | 关键类型 |
    |------|----------|----------|
    | 独立应用入口 | `PipeCAD.Standalone` | `Standalone` |
-   | 项目/数据库 | `PipeCAD.Database` | `Project`, `DbElement`, `DbAttribute`, `DbElementType`,  |
+   | 项目/数据库 | `PipeCAD.Database` | `Project`, `DbElement`, `DbAttribute`, `DbElementType`, `BaseFilter`, `TypeFilter`, `DbElementCollection` |
    | 几何（点/线/面/方向） | `PipeCAD.Geometry` | `Position`, `Orientation`, `Direction`, `Line`, `Plane`, `LimitsBox`, `Axis` |
    | 图形接口 | `PipeCAD.Graphics` | `DrawListManager`, `DrawList`, `Colour`, `Aid` |
 
@@ -114,6 +114,9 @@ desc = project.Description
 # 保存
 project.Save()
 
+# World 根结点元素
+world = Project.World
+
 ```
 
 ### 3. 查找元素
@@ -175,9 +178,9 @@ ce.Delete()
 在 `DbElement` 中为元素属性的读写提供两种方式：
 
 + 使用 `GetAttribute()/SetAttribute()`；
-+ 直接使用属性名称来查询和设值；
++ 直接使用对象属性名称来查询和设值；
 
-其中属性的名称必须是在 `data/Attribute.md` 中。
+优先使用对象属性的方式来读写属性，其中属性的名称必须是在 `data/Attribute.md` 中。
 
 ```py
 from PipeCAD.Database import *
@@ -193,6 +196,9 @@ name = ce.Name
 
 # 写属性方式1：通过函数根据属性名称来设置属性
 ce.SetAttribute('Name', 'new-name')
+
+# 写属性方式2：通过对象的属性方式来设置属性
+ce.Name = 'new-name'
 
 ```
 
@@ -225,9 +231,25 @@ box.Orientation = Orientation(dx, dy)
 
 ```
 
-### 8. 事件处理
+### 8. 元素集合
 
-### 9. 事务机制
+通过元素集合 `DbElementCollection` 来过滤满足条件的元素集合。
+
+```py
+from PipeCAD.Database import *
+
+typeFilter = TypeFilter('SITE')
+elem = Project.World
+
+col = DbElementCollection(elem, typeFilter)
+
+siteList = col.Collect()
+
+```
+
+### 9. 事件处理
+
+### 10. 事务机制
 
 PipeCAD 为数据修改提供事务机制，如果想将增删改的数据修改打包成一次 `Undo` 撤销，可以使用事务机制。在数据改变之前先开启事务 `OpenTransaction`，数据改变完成后，提交事务 `CommitTransaction`。有异常报错时，必须终止事务 `AbortTransaction`。
 
@@ -269,7 +291,7 @@ canUndo = Project.Current.CanUndo
 canRedo = Project.Current.CanRedo
 ```
 
-### 10. 图形接口
+### 11. 图形接口
 
 
 ## 参考文档
