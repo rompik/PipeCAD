@@ -14,4 +14,6 @@ source: PipeCAD.Database
 | DbElement | Methods to read and write data to the element. | DbElement.md |
 | BaseFilter | Base filters. | BaseFilter.md |
 | TypeFilter | Element type filters. | TypeFilter.md |
+| AndFilter | And filters. | AndFilter.md |
+| AttributeStringFilter | Element string attribute filters. | AttributeStringFilter.md |
 | DbElementCollection | Collect elements by filters. | DbElementCollection.md |
