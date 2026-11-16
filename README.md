@@ -41,4 +41,4 @@ How to use PipeCAD? Please refer to the [PipeCAD User Guide](docs/user_guide_en.
 
 ## PipeCAD Dev Guide
 
-If you want to develop plugin for PipeCAD, please refer to [PipeCAD Dev Guide](docs/dev_guide_en.md). [中文版](skills/pipecad-dev-python/SKILL.md)
+If you want to develop plugins for PipeCAD, or want to use AI to develop PipeCAD plugins, please refer to AI agent skill  `pipecad-dev-python`. [中文版](skills/pipecad-dev-python/SKILL.md)
