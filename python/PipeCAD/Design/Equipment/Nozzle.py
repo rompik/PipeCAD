@@ -195,8 +195,12 @@ class NozzleDialog(QDialog):
     def specChanged(self):
         self.comboGtype.clear()
 
-        typeFilter = TypeFilter('SELE')
         specElement = self.comboSpec.currentData
+        if specElement is None:
+            return
+        # if
+
+        typeFilter = TypeFilter('SELE')
         collection = DbElementCollection(specElement, typeFilter)
         seleList = collection.Collect()
 
@@ -242,12 +246,27 @@ class NozzleDialog(QDialog):
                 return
             # if
 
+            # Set bore and spec.
+            scomElement = nozzle.Catref
+            if scomElement.IsValid:
+                print(scomElement.Name)
+                param = scomElement.Param
+                if len(param) > 0:
+                    print(str(param[0]))
+                    self.comboBore.currentText = str(param[0])
+                # if
+            # if
+
             pos = nozzle.Position
             self.textPx.text = str(pos.X)
             self.textPy.text = str(pos.Y)
             self.textPz.text = str(pos.Z)
 
             self.textHeight.text = str(nozzle.Height)
+            self.textTemp.text = str(nozzle.Temperature)
+            self.textPressure.text = str(nozzle.Pressure)
+            self.textDescription.text = nozzle.Description
+            self.textPurpose.text = nozzle.Purpose
         else:
             self.setWindowTitle(self.tr("Create Nozzle"))
         # if
@@ -259,6 +278,12 @@ class NozzleDialog(QDialog):
     # setNozzle
 
     def createNozzle(self):
+
+        spcoElement = self.comboBore.currentData
+        if spcoElement is None:
+            QMessageBox.warning(self, '', self.tr('Please set nozzle Spec!'))
+            return
+        # if
 
         try:
             height = float(self.textHeight.text)
@@ -273,6 +298,9 @@ class NozzleDialog(QDialog):
             nozzle.Name = self.textName.text
             nozzle.Position = Position(px, py, pz)
             nozzle.Height = height
+            nozzle.Catref = spcoElement
+            nozzle.Purpose = self.textPurpose.text
+            nozzle.Description = self.textDescription.text
 
             Project.Current.CommitTransaction()
 
@@ -283,6 +311,7 @@ class NozzleDialog(QDialog):
     # createNozzle
 
     def modifyNozzle(self):
+        nozzle = DbElement.Current
 
         try:
             height = float(self.textHeight.text)
