@@ -2,6 +2,7 @@
 
 | PipeCAD | **Free Edition** | **Professional Edition** |
 | :--- | :--- | :--- |
+| Import Catalogue from Excel | :heavy_check_mark: | :heavy_check_mark:   |
 | Design Modeling | :heavy_check_mark: | :heavy_check_mark:   |
 | Export Piping PCF | :heavy_check_mark: | :heavy_check_mark:   |
 | Export Review RVM | :x: | :heavy_check_mark:   |
