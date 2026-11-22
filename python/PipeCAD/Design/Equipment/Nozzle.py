@@ -18,6 +18,7 @@
 
 from PythonQt.QtCore import *
 from PythonQt.QtGui import *
+from PythonQt.QtSvg import *
 
 from PipeCAD.Geometry import *
 from PipeCAD.Database import *
@@ -168,11 +169,8 @@ class NozzleDialog(QDialog):
         self.horizontalLayout.addLayout(self.verticalLayout)
 
         # Diagram
-        self.labelDiagram = QLabel()
-        self.labelDiagram.setMinimumSize(QSize(280, 360))
-        self.labelDiagram.setAlignment(Qt.AlignLeading|Qt.AlignLeft|Qt.AlignTop)
-        self.labelDiagram.setPixmap(QPixmap(":/icons/diagram_nozzle.svg"))
-        self.horizontalLayout.addWidget(self.labelDiagram)
+        self.svgDiagram = QSvgWidget(':/icons/diagram_nozzle.svg')
+        self.horizontalLayout.addWidget(self.svgDiagram)
 
         # Init nozzle spec.
         self.initNozzleSpec()
@@ -182,7 +180,7 @@ class NozzleDialog(QDialog):
         typeFilter = TypeFilter('SPEC')
         
         collection = DbElementCollection(Project.World, typeFilter)
-        specList = collection.Collect()
+        specList = collection.Perform()
         for specElement in specList:
             if specElement.Purpose == 'NOZZ':
                 self.comboSpec.addItem(specElement.Description, specElement)
@@ -202,7 +200,7 @@ class NozzleDialog(QDialog):
 
         typeFilter = TypeFilter('SELE')
         collection = DbElementCollection(specElement, typeFilter)
-        seleList = collection.Collect()
+        seleList = collection.Perform()
 
         for seleElement in seleList:
             self.comboGtype.addItem(seleElement.Description, seleElement)
@@ -222,7 +220,7 @@ class NozzleDialog(QDialog):
         typeFilter = TypeFilter('SPCO')
 
         collection = DbElementCollection(seleElement, typeFilter)
-        spcoList = collection.Collect()
+        spcoList = collection.Perform()
 
         for spcoElement in spcoList:
             scomElement = spcoElement.Catref
