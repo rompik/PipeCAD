@@ -30,10 +30,10 @@ world = Project.World
 col = DbElementCollection(world, typeFilter)
 
 # Perform collect.
-spcoList = col.Collect()
+spcoList = col.Perform()
 ```
 
-### `Collect()`
+### `Perform()`
 
 Perform collect and return the element list.
 
@@ -44,5 +44,5 @@ world = Project.World
 col = DbElementCollection(world, typeFilter)
 
 # Perform collect.
-spcoList = col.Collect()
+spcoList = col.Perform()
 ```
