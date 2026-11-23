@@ -301,9 +301,9 @@ def CreatePipe():
     pipeDialog.show()
 # CreatePipe
 
-class BranchDialog(QDialog):
+class BranchDialog(QDockWidget):
     def __init__(self, parent = None):
-        QDialog.__init__(self, parent)
+        QDockWidget.__init__(self, parent)
 
         self.setupUi()
     # __init__
@@ -314,12 +314,250 @@ class BranchDialog(QDialog):
 
     def setupUi(self):
         self.setWindowTitle(self.tr("Create Branch"))
+        self.setAllowedAreas(Qt.LeftDockWidgetArea|Qt.RightDockWidgetArea)
 
-        self.verticalLayout = QVBoxLayout(self)
+        MainWindow.addDockWidget(Qt.RightDockWidgetArea, self)
 
-        self.labelHello = QLabel(self.tr("Hello PipeCAD!"))
+        self.dockContext = QWidget()
+        self.verticalLayout = QVBoxLayout(self.dockContext)
 
-        self.verticalLayout.addWidget(self.labelHello)
+        sizePolicy = QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+
+        # Pipe name
+        self.horizontalLayout = QHBoxLayout()
+        self.labelPipe = QLabel(self.tr("Pipe: "))
+        self.labelPipe.setSizePolicy(sizePolicy)
+
+        self.textPipe = QLabel("pipe")
+        self.textPipe.setStyleSheet('color:red;')
+        self.buttonPipe = QPushButton(self.tr("Set Pipe"))
+        self.buttonPipe.setSizePolicy(sizePolicy)
+        #self.buttonPipe.clicked.connect(self.setPipe)
+
+        self.horizontalLayout.addWidget(self.labelPipe)
+        self.horizontalLayout.addWidget(self.textPipe)
+        self.horizontalLayout.addWidget(self.buttonPipe)
+        self.verticalLayout.addLayout(self.horizontalLayout)
+
+        self.linePipeDetail = QFrame()
+        self.linePipeDetail.setFrameShape(QFrame.HLine)
+        self.linePipeDetail.setFrameShadow(QFrame.Sunken)
+        self.verticalLayout.addWidget(self.linePipeDetail)
+
+        # Pipe spec
+        self.horizontalLayout = QHBoxLayout()
+        self.labelSpec = QLabel(self.tr("Spec: "))
+        self.labelSpec.setSizePolicy(sizePolicy)
+        self.textSpec = QLabel("")
+        self.buttonSpec = QPushButton(self.tr("Set Detail"))
+        self.buttonSpec.setSizePolicy(sizePolicy)
+        #self.buttonSpec.clicked.connect(self.modifyPipe)
+
+        self.horizontalLayout.addWidget(self.labelSpec)
+        self.horizontalLayout.addWidget(self.textSpec)
+        self.horizontalLayout.addWidget(self.buttonSpec)
+
+        self.verticalLayout.addLayout(self.horizontalLayout)
+
+        # Branch Table.
+        self.tableWidgetBranch = QTableWidget()
+        self.tableWidgetBranch.setColumnCount(3)
+        self.tableWidgetBranch.setHorizontalHeaderLabels([self.tr('Branch'), self.tr('Head'), self.tr('Tail')])
+        self.tableWidgetBranch.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.tableWidgetBranch.setAlternatingRowColors(True)
+        self.tableWidgetBranch.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.tableWidgetBranch.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.tableWidgetBranch.setGridStyle(Qt.SolidLine)
+        self.tableWidgetBranch.horizontalHeader().setStretchLastSection(True)
+        self.tableWidgetBranch.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.tableWidgetBranch.verticalHeader().setMinimumSectionSize(16)
+        self.tableWidgetBranch.verticalHeader().setDefaultSectionSize(18)
+        self.tableWidgetBranch.verticalHeader().hide() 
+        #self.tableWidgetBranch.itemSelectionChanged.connect(self.currentBranchChanged)
+        self.verticalLayout.addWidget(self.tableWidgetBranch)
+
+        # New Branch.
+        self.horizontalLayout = QHBoxLayout()
+        self.buttonBranch = QPushButton(self.tr("New Branch"))
+        #self.buttonBranch.clicked.connect(self.createBranch)
+        self.horizontalLayout.addWidget(self.buttonBranch)
+
+        self.horizontalSpacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self.horizontalLayout.addItem(self.horizontalSpacer)
+
+        self.verticalLayout.addLayout(self.horizontalLayout)
+
+        # Current Branch
+        self.horizontalLayout = QHBoxLayout()
+        self.labelBranch = QLabel(self.tr("Branch: "))
+        self.labelBranch.setSizePolicy(sizePolicy)
+        self.textBranch = QLabel()
+        self.horizontalLayout.addWidget(self.labelBranch)
+        self.horizontalLayout.addWidget(self.textBranch)
+        self.verticalLayout.addLayout(self.horizontalLayout)
+
+        self.lineBranchDetail = QFrame()
+        self.lineBranchDetail.setFrameShape(QFrame.HLine)
+        self.lineBranchDetail.setFrameShadow(QFrame.Sunken)
+        self.verticalLayout.addWidget(self.lineBranchDetail)
+
+        # Branch spec
+        self.horizontalLayout = QHBoxLayout()
+        self.labelBranchSpec = QLabel(self.tr("Spec: "))
+        self.labelBranchSpec.setSizePolicy(sizePolicy)
+        self.textBranchSpec = QLabel()
+        self.buttonBranchSpec = QPushButton(self.tr("Set Detail"))
+        self.buttonBranchSpec.setSizePolicy(sizePolicy)
+        #self.buttonBranchSpec.clicked.connect(self.setBranchSpec)
+
+        self.horizontalLayout.addWidget(self.labelBranchSpec)
+        self.horizontalLayout.addWidget(self.textBranchSpec)
+        self.horizontalLayout.addWidget(self.buttonBranchSpec)
+
+        self.verticalLayout.addLayout(self.horizontalLayout)
+
+        # Head Detail
+        self.lableHeadDetail = QLabel(self.tr("Head Detail: "))
+        self.lineHeadDetail = QFrame()
+        self.lineHeadDetail.setFrameShape(QFrame.HLine)
+        self.lineHeadDetail.setFrameShadow(QFrame.Sunken)
+
+        self.verticalLayout.addWidget(self.lableHeadDetail)
+        self.verticalLayout.addWidget(self.lineHeadDetail)
+
+        self.horizontalLayout = QHBoxLayout()
+        self.labelHeadBore = QLabel(self.tr("Bore: "))
+        self.labelHeadBore.setSizePolicy(sizePolicy)
+        self.textHeadBore = QLabel("")
+        self.labelHeadType = QLabel(self.tr("Connection Type: "))
+        self.labelHeadType.setSizePolicy(sizePolicy)
+        self.textHeadType = QLabel("")
+        self.horizontalLayout.addWidget(self.labelHeadBore)
+        self.horizontalLayout.addWidget(self.textHeadBore)
+        self.horizontalLayout.addWidget(self.labelHeadType)
+        self.horizontalLayout.addWidget(self.textHeadType)
+
+        self.verticalLayout.addLayout(self.horizontalLayout)
+
+        self.horizontalLayout = QHBoxLayout()
+        self.labelHeadDirection = QLabel(self.tr("Direction: "))
+        self.labelHeadDirection.setSizePolicy(sizePolicy)
+        self.textHeadDirection = QLabel("")
+        self.horizontalLayout.addWidget(self.labelHeadDirection)
+        self.horizontalLayout.addWidget(self.textHeadDirection)
+
+        self.verticalLayout.addLayout(self.horizontalLayout)
+
+        self.horizontalLayout = QHBoxLayout()
+        self.labelHeadPosition = QLabel(self.tr("Position: "))
+        self.labelHeadPosition.setSizePolicy(sizePolicy)
+        self.textHeadPosition = QLabel("")
+        self.horizontalLayout.addWidget(self.labelHeadPosition)
+        self.horizontalLayout.addWidget(self.textHeadPosition)
+
+        self.verticalLayout.addLayout(self.horizontalLayout)
+
+        self.horizontalLayout = QHBoxLayout()
+        self.horizontalSpacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self.horizontalLayout.addItem(self.horizontalSpacer)
+
+        self.buttonChangeHead = QPushButton(self.tr("Change"))
+        self.buttonChangeHead.setSizePolicy(sizePolicy)
+        #self.buttonChangeHead.clicked.connect(self.changeHeadDetail)
+        self.horizontalLayout.addWidget(self.buttonChangeHead)
+
+        self.verticalLayout.addLayout(self.horizontalLayout)
+
+        # Head Connection
+        self.labelHeadConnection = QLabel(self.tr("Head Connection:"))
+        self.lineHeadConnection = QFrame()
+        self.lineHeadConnection.setFrameShape(QFrame.HLine)
+        self.lineHeadConnection.setFrameShadow(QFrame.Sunken)
+
+        self.verticalLayout.addWidget(self.labelHeadConnection)
+        self.verticalLayout.addWidget(self.lineHeadConnection)
+
+        self.horizontalLayout = QHBoxLayout()
+        self.textHeadConnection = QLabel(self.tr("Undefined"))
+        self.buttonHeadConnection = QPushButton(self.tr("Change"))
+        #self.buttonHeadConnection.clicked.connect(self.changeHeadConnection)
+        self.buttonHeadConnection.setSizePolicy(sizePolicy)
+        self.horizontalLayout.addWidget(self.textHeadConnection)
+        self.horizontalLayout.addWidget(self.buttonHeadConnection)
+
+        self.verticalLayout.addLayout(self.horizontalLayout)
+
+        # Tail Detail
+        self.lableTailDetail = QLabel(self.tr("Tail Detail: "))
+        self.lineTailDetail = QFrame()
+        self.lineTailDetail.setFrameShape(QFrame.HLine)
+        self.lineTailDetail.setFrameShadow(QFrame.Sunken)
+
+        self.verticalLayout.addWidget(self.lableTailDetail)
+        self.verticalLayout.addWidget(self.lineTailDetail)
+
+        self.horizontalLayout = QHBoxLayout()
+        self.labelTailBore = QLabel(self.tr("Bore: "))
+        self.textTailBore = QLabel("")
+        self.labelTailType = QLabel(self.tr("Connection Type: "))
+        self.textTailType = QLabel("")
+        self.horizontalLayout.addWidget(self.labelTailBore)
+        self.horizontalLayout.addWidget(self.textTailBore)
+        self.horizontalLayout.addWidget(self.labelTailType)
+        self.horizontalLayout.addWidget(self.textTailType)
+
+        self.verticalLayout.addLayout(self.horizontalLayout)
+
+        self.horizontalLayout = QHBoxLayout()
+        self.labelTailDirection = QLabel(self.tr("Direction: "))
+        self.labelTailDirection.setSizePolicy(sizePolicy)
+        self.textTailDirection = QLabel("")
+        self.horizontalLayout.addWidget(self.labelTailDirection)
+        self.horizontalLayout.addWidget(self.textTailDirection)
+
+        self.verticalLayout.addLayout(self.horizontalLayout)
+
+        self.horizontalLayout = QHBoxLayout()
+        self.labelTailPosition = QLabel(self.tr("Position: "))
+        self.labelTailPosition.setSizePolicy(sizePolicy)
+        self.textTailPosition = QLabel("")
+        self.horizontalLayout.addWidget(self.labelTailPosition)
+        self.horizontalLayout.addWidget(self.textTailPosition)
+
+        self.verticalLayout.addLayout(self.horizontalLayout)
+
+        self.horizontalLayout = QHBoxLayout()
+        self.horizontalSpacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self.horizontalLayout.addItem(self.horizontalSpacer)
+
+        self.buttonChangeTail = QPushButton(self.tr("Change"))
+        self.buttonChangeTail.setSizePolicy(sizePolicy)
+        #self.buttonChangeTail.clicked.connect(self.changeTailDetail)
+        self.horizontalLayout.addWidget(self.buttonChangeTail)
+
+        self.verticalLayout.addLayout(self.horizontalLayout)
+
+        # Tail Connection
+        self.labelTailConnection = QLabel(self.tr("Tail Connection:"))
+        self.lineTailConnection = QFrame()
+        self.lineTailConnection.setFrameShape(QFrame.HLine)
+        self.lineTailConnection.setFrameShadow(QFrame.Sunken)
+
+        self.verticalLayout.addWidget(self.labelTailConnection)
+        self.verticalLayout.addWidget(self.lineTailConnection)
+
+        self.horizontalLayout = QHBoxLayout()
+        self.textTailConnection = QLabel(self.tr("Undefined"))
+        self.buttonTailConnection = QPushButton(self.tr("Change"))
+        self.buttonTailConnection.setSizePolicy(sizePolicy)
+        #self.buttonTailConnection.clicked.connect(self.changeTailConnection)
+        self.horizontalLayout.addWidget(self.textTailConnection)
+        self.horizontalLayout.addWidget(self.buttonTailConnection)
+
+        self.verticalLayout.addLayout(self.horizontalLayout)
+
+        # Set dock widget.
+        self.setWidget(self.dockContext)
 
     # setupUi
 
