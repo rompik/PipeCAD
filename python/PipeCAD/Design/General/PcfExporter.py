@@ -46,7 +46,7 @@ def Export(branchList, filename):
     ispec = pipeline.Ispec
     tspec = pipeline.Tspec
 
-    pcfFile.write("PIPELINE-REFEREENCE {}\n".format(pipeline.Name))
+    pcfFile.write("PIPELINE-REFERENCE {}\n".format(pipeline.Name))
     if pspec.IsValid:
         pcfFile.write("    PIPING-SPEC  {}\n".format(pspec.Name))
     # if
