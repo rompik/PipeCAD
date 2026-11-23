@@ -102,16 +102,16 @@ class PipeDialog(QDialog):
         self.formLayout.setWidget(2, QFormLayout.FieldRole, self.comboTracing)
 
         self.labelTemp = QLabel(self.tr("Temperature"))
-        self.lineTemp = QLineEdit("-10000.00")
+        self.textTemp = QLineEdit("-10000.00")
 
         self.formLayout.setWidget(3, QFormLayout.LabelRole, self.labelTemp)
-        self.formLayout.setWidget(3, QFormLayout.FieldRole, self.lineTemp)
+        self.formLayout.setWidget(3, QFormLayout.FieldRole, self.textTemp)
 
         self.labelPressure = QLabel(self.tr("Pressure"))
-        self.linePressure = QLineEdit("0.00")
+        self.textPressure = QLineEdit("0.00")
 
         self.formLayout.setWidget(4, QFormLayout.LabelRole, self.labelPressure)
-        self.formLayout.setWidget(4, QFormLayout.FieldRole, self.linePressure)
+        self.formLayout.setWidget(4, QFormLayout.FieldRole, self.textPressure)
 
         self.verticalLayout.addLayout(self.formLayout)
 
@@ -191,8 +191,51 @@ class PipeDialog(QDialog):
             self.setWindowTitle(self.tr('Create Pipe'))
         else:
             self.setWindowTitle(self.tr('Modify Pipe'))
+            self.setPipeData()
         # if
     # activateName
+
+    def setPipeData(self):
+        index = self.comboName.currentIndex
+
+        # Set pipe data for current pipe.
+        pipe = DbElement.Current
+        if pipe.Type != 'PIPE':
+            QMessageBox.warning(self, '', self.tr('Please select PIPE to modify!'))
+            return
+        # if
+
+        # Set pipe name.
+        self.textName.text = pipe.Name
+
+        # Set pipe spec.
+        pspec = pipe.Pspec
+        if pspec.IsValid:
+            specItems = self.listSpec.findItems(pspec.Name, Qt.MatchExactly)
+            if len(specItems) == 1:
+                self.listSpec.setCurrentItem(specItems[0])
+            # if
+        # if
+
+        # Set insulation spec.
+        ispec = pipe.Ispec
+        if ispec.IsValid:
+            self.comboInsu.currentIndex = self.comboInsu.findText(ispec.Name)
+        # if
+
+        # Set tracing spec.
+        tspec = pipe.Tspec
+        if tspec.IsValid:
+            self.comboTracing.currentIndex = self.comboTracing.findText(tspec.Name)
+        # if
+
+        self.comboBore.currentText = str(int(pipe.Bore))
+
+        self.textTemp.text = str(pipe.Temperature)
+        self.textPressure.text = str(pipe.Pressure)
+
+        self.comboName.setItemData(index, pipe)
+    # setPipeData
 
     def createPipe(self):
         try:
@@ -204,6 +247,8 @@ class PipeDialog(QDialog):
             pipe.Pspec = self.listSpec.currentItem().data(Qt.UserRole)
             pipe.Ispec = self.comboInsu.currentData
             pipe.Tspec = self.comboTracing.currentData
+            pipe.Temperature = float(self.textTemp.text)
+            pipe.Pressure = float(self.textPressure.text)
 
             Project.Current.CommitTransaction()
         except Exception as ex:
@@ -213,7 +258,28 @@ class PipeDialog(QDialog):
     # createPipe
 
     def modifyPipe(self):
-        print('modify pipe')
+        pipe = self.comboName.currentData
+        if pipe is None or not pipe.IsValid:
+            QMessageBox.warning(self, '', self.tr('Please select PIPE to modify!'))
+            return
+        # if
+
+        try:
+            Project.Current.OpenTransaction()
+
+            pipe.Name = self.textName.text
+            pipe.Bore = float(self.comboBore.currentText)
+            pipe.Pspec = self.listSpec.currentItem().data(Qt.UserRole)
+            pipe.Ispec = self.comboInsu.currentData
+            pipe.Tspec = self.comboTracing.currentData
+            pipe.Temperature = float(self.textTemp.text)
+            pipe.Pressure = float(self.textPressure.text)
+
+            Project.Current.CommitTransaction()
+        except Exception as ex:
+            QMessageBox.critical(self, '', ex)
+            Project.Current.AbortTransaction()
+        # try
     # modifyPipe
 
     def accept(self):
