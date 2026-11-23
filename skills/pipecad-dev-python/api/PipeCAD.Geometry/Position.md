@@ -6,7 +6,7 @@ kind: Class
 
 # PipeCAD.Geometry.Position Class
 
-> Position in 3D space.
+> Represents a position in 3D space.
 
 ## Requirements
 
@@ -14,60 +14,66 @@ Namespace: PipeCAD.Geometry
 
 Assembly: python/PipeCAD/Geometry.pyd
 
+The examples assume the PipeCAD geometry API is imported:
+
+```py
+from PipeCAD.Geometry import *
+```
+
 ## Properties
 
 ### `X`
 
-X coordinate of the position.
+Returns the X coordinate of this position.
 
 ```py
-pos = Position(1, 2, 3)
-x = pos.X
+position = Position(1, 2, 3)
+x_coordinate = position.X
 ```
 
 ### `Y`
 
-Y coordinate of the position.
+Returns the Y coordinate of this position.
 
 ```py
-pos = Position(1, 2, 3)
-y = pos.Y
+position = Position(1, 2, 3)
+y_coordinate = position.Y
 ```
 
 ### `Z`
 
-Z coordinate of the position.
+Returns the Z coordinate of this position.
 
 ```py
-pos = Position(1, 2, 3)
-Z = pos.Z
+position = Position(1, 2, 3)
+z_coordinate = position.Z
 ```
 
 ## Methods
 
 ### `Position()`
 
-Construct (0, 0, 0) position.
+Creates a position with coordinates `(0, 0, 0)`.
 
 ```py
-pos = Position()
+position = Position()
 ```
 
 ### `Position(x, y, z)`
 
-Construct (x, y, z) position.
+Creates a position from the specified `x`, `y`, and `z` coordinates.
 
 ```py
-pos = Position(1, 2, 3)
+position = Position(1, 2, 3)
 ```
 
 ### `Distance(pos)`
 
-Calcuate distance between two position.
+Returns the distance between this position and the specified position.
 
 ```py
-pos1 = Position(1, 2, 3)
-pos2 = Position(4, 5, 6)
+first_position = Position(1, 2, 3)
+second_position = Position(4, 5, 6)
 
-dist = pos1.Distance(pos2)
+distance = first_position.Distance(second_position)
 ```

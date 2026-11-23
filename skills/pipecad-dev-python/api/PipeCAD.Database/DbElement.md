@@ -6,7 +6,7 @@ kind: Class
 
 # PipeCAD.Database.DbElement Class
 
-> Methods to read and write data to the element.
+> Represents a database element and provides properties and methods to inspect and modify it.
 
 ## Requirements
 
@@ -14,257 +14,248 @@ Namespace: PipeCAD.Database
 
 Assembly: python/PipeCAD/Database.pyd
 
+The examples assume PipeCAD is running with an open project and a current element. Run this setup before each example; attribute examples require an element that supports the attribute:
+
+```py
+from PipeCAD.Database import *
+from PipeCAD.Geometry import *
+
+current_element = DbElement.Current
+```
+
 ## Properties
 
 ### `Current`
 
-Static property: Project current element.
+Static property. Returns the current element in the project.
 
 ```py
-ce = DbElement.Current
+current_element = DbElement.Current
 ```
 
 ### `Owner`
 
-Owner element of this element.
+Returns the element that owns this element.
 
 ```py
-ce = DbElement.Current
-ce.Owner
+current_element.Owner
 ```
 
 ### `IsNull`
 
-True if this element is null.
+Returns whether this element is null.
 
 ```py
-ce = DbElement.Current
-ce.IsNull
+current_element.IsNull
 ```
 
 ### `IsValid`
 
-True if this element is valid.
+Returns whether this element is valid.
 
 ```py
-ce = DbElement.Current
-ce.IsValid
+current_element.IsValid
 ```
 
 ### `Members`
 
-Get element memeber list
+Returns this element's child elements.
 
 ```py
-ce = DbElement.Current
-ce.Members
+current_element.Members
 ```
 
 ## Methods
 
+For `SetAttribute` and the getter methods, `attrName` is the attribute's `QueryText` from `Attributes` in `data/MetaData.json`.
+Use a getter that matches the attribute's type. `SetAttribute` supports the value types listed below; the value type should match the attribute's type in `data/MetaData.json`.
+The existing `Weight` examples are retained, but `Weight` is not listed in `data/MetaData.json`; its availability is unconfirmed.
+
+`Create`, `Delete`, and `SetAttribute` modify project data. To group changes into one undoable operation, use a project transaction as described in the [transaction workflow](../../SKILL.md#10-transactions).
+
 ### `Create(index, type)`
 
-Create a new Element at given position in this Element's child list.
+Creates a child element at the specified position and returns it. `index` is the insertion position: values less than or equal to `1` place the element first, and values greater than the number of child elements place it last. `type` is the uppercase short name of the element type from `Types` in `data/MetaData.json`.
 
 ```py
-ce = DbElement.Current
-elem = ce.Create(1, 'SITE')
+new_element = current_element.Create(1, 'SITE')
 ```
 
 ### `Delete()`
 
-Delete this Element.
+Deletes this element.
 
 ```py
-ce = DbElement.Current
-ce.Delete()
+current_element.Delete()
 ```
 
 ### `SetAttribute(attrName, int)`
 
-Set Attribute on Element as an integer.
+Sets the named attribute to an integer value.
 
 ```py
-ce = DbElement.Current
-ce.SetAttribute('Area', 1)
+current_element.SetAttribute('Area', 1)
 
-# Set attribute directly.
-ce.Area = 1
+# Set the attribute directly.
+current_element.Area = 1
 ```
 
 ### `SetAttribute(attrName, bool)`
 
-Set Attribute on Element as boolean.
+Sets the named attribute to a boolean value.
 
 ```py
-ce = DbElement.Current
-ce.SetAttribute('Lock', True)
+current_element.SetAttribute('Lock', True)
 
-# Set attribute directly.
-ce.Lock = True
+# Set the attribute directly.
+current_element.Lock = True
 ```
 
 ### `SetAttribute(attrName, float)`
 
-Set Attribute on Element as double.
+Sets the named attribute to a floating-point value.
 
 ```py
-ce = DbElement.Current
-ce.SetAttribute('Weight', 1.36)
+current_element.SetAttribute('Weight', 1.36)
 
-# Set attribute directly.
-ce.Weight = 1.36
+# Set the attribute directly.
+current_element.Weight = 1.36
 ```
 
 ### `SetAttribute(attrName, string)`
 
-Set Attribute on Element as string.
+Sets the named attribute to a string value.
 
 ```py
-ce = DbElement.Current
-ce.SetAttribute('Name', 'new-name')
+current_element.SetAttribute('Name', 'new-name')
 
-# Set attribute directly.
-ce.Name = 'new-name'
+# Set the attribute directly.
+current_element.Name = 'new-name'
 ```
 
 ### `SetAttribute(attrName, Direction)`
 
-Set Attribute on Element as direction.
+Sets the named attribute to a direction value.
 
 ```py
-ce = DbElement.Current
+direction = Direction(1, 0, 0)
+current_element.SetAttribute('Hdirection', direction)
 
-dir = Direction(1, 0, 0)
-ce.SetAttribute('Hdirection', dir)
-
-# Set attribute directly.
-ce.Hdirection = dir
+# Set the attribute directly.
+current_element.Hdirection = direction
 ```
 
 ### `SetAttribute(attrName, Position)`
 
-Set Attribute on Element as Position.
+Sets the named attribute to a position value.
 
 ```py
-ce = DbElement.Current
+position = Position(1, 0, 0)
+current_element.SetAttribute('Position', position)
 
-pos = Position(1, 0, 0)
-ce.SetAttribute('Position', pos)
-
-# Set attribute directly.
-ce.Position = pos
+# Set the attribute directly.
+current_element.Position = position
 ```
 
 ### `SetAttribute(attrName, Orientation)`
 
-Set Attribute on Element as Orientation.
+Sets the named attribute to an orientation value.
 
 ```py
-ce = DbElement.Current
+x_direction = Direction(1, 0, 0)
+y_direction = Direction(0, 0, 1)
+orientation = Orientation(x_direction, y_direction)
 
-dx = Direction(1, 0, 0)
-dy = Direction(0, 0, 1)
-ori = Orientation(dx, dy)
+current_element.SetAttribute('Orientation', orientation)
 
-ce.SetAttribute('Orientation', ori)
-
-# Set attribute directly.
-ce.Orientation = ori
+# Set the attribute directly.
+current_element.Orientation = orientation
 ```
 
 ### `GetInteger(attrName)`
 
-Get integer Attribute value on Element.
+Returns the named attribute's integer value.
 
 ```py
-ce = DbElement.Current
-area = ce.GetInteger('Area')
+area = current_element.GetInteger('Area')
 
-# Get attribute directly.
-area = ce.Area
+# Read the attribute directly.
+area = current_element.Area
 ```
 
 ### `GetDouble(attrName)`
 
-Get floating-point Attribute value on Element.
+Returns the named attribute's floating-point value.
 
 ```py
-ce = DbElement.Current
-w = ce.GetDouble('Weight')
+weight = current_element.GetDouble('Weight')
 
-# Get attribute directly.
-w = ce.Weight
+# Read the attribute directly.
+weight = current_element.Weight
 ```
 
 ### `GetBool(attrName)`
 
-Get boolean Attribute value on Element.
+Returns the named attribute's boolean value.
 
 ```py
-ce = DbElement.Current
-lock = ce.GetBool('Lock')
+is_locked = current_element.GetBool('Lock')
 
-# Get attribute directly.
-lock = ce.Lock
+# Read the attribute directly.
+is_locked = current_element.Lock
 ```
 
 ### `GetString(attrName)`
 
-Get text value Attribute on Element.
+Returns the named attribute's string value.
 
 ```py
-ce = DbElement.Current
-name = ce.GetString('Name')
+name = current_element.GetString('Name')
 
-# Get attribute directly.
-name = ce.Name
+# Read the attribute directly.
+name = current_element.Name
 ```
 
 ### `GetElement(attrName)`
 
-Get Ref attribute on an Element.
+Returns the `DbElement` referenced by the named attribute.
 
 ```py
-ce = DbElement.Current
-ptref = ce.GetElement('Ptref')
+referenced_element = current_element.GetElement('Ptref')
 
-# Get attribute directly.
-ptref = ce.Ptref
+# Read the attribute directly.
+referenced_element = current_element.Ptref
 ```
 
 ### `GetPosition(attrName)`
 
-Get position attribute on an Element.
+Returns the named attribute's position value.
 
 ```py
-ce = DbElement.Current
-pos = ce.GetPosition('Aposition')
+position = current_element.GetPosition('Aposition')
 
-# Get attribute directly.
-pos = ce.Aposition
+# Read the attribute directly.
+position = current_element.Aposition
 ```
 
 ### `GetDirection(attrName)`
 
-Get direction attribute on an Element.
+Returns the named attribute's direction value.
 
 ```py
-ce = DbElement.Current
-dir = ce.GetDirection('Hdirection')
+direction = current_element.GetDirection('Hdirection')
 
-# Get attribute directly.
-dir = ce.Hdirection
+# Read the attribute directly.
+direction = current_element.Hdirection
 ```
 
 ### `GetOrientation(attrName)`
 
-Get orientation attribute on an Element.
+Returns the named attribute's orientation value.
 
 ```py
-ce = DbElement.Current
-ori = ce.GetOrientation('Orientation')
+orientation = current_element.GetOrientation('Orientation')
 
-# Get attribute directly.
-ori = ce.Orientation
+# Read the attribute directly.
+orientation = current_element.Orientation
 ```

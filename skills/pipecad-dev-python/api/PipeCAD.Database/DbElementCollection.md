@@ -6,13 +6,19 @@ kind: Class
 
 # PipeCAD.Database.DbElementCollection Class
 
-> Collect elements by fileters for the given element.
+> Collects elements from a given element using a filter.
 
 ## Requirements
 
 Namespace: PipeCAD.Database
 
 Assembly: python/PipeCAD/Database.pyd
+
+The examples assume the PipeCAD database API is imported:
+
+```py
+from PipeCAD.Database import *
+```
 
 ## Properties
 
@@ -21,28 +27,28 @@ Assembly: python/PipeCAD/Database.pyd
 
 ### `DbElementCollection(element, filter)`
 
-Collect elements by filter for the element.
+Creates a collection for the specified element and filter.
 
 ```py
-typeFilter = TypeFilter('SPCO')
-world = Project.World
+type_filter = TypeFilter('SPCO')
+world_element = Project.World
 
-col = DbElementCollection(world, typeFilter)
+element_collection = DbElementCollection(world_element, type_filter)
 
 # Perform collect.
-spcoList = col.Perform()
+matching_elements = element_collection.Perform()
 ```
 
 ### `Perform()`
 
-Perform collect and return the element list.
+Collects and returns the elements that match the filter.
 
 ```py
-typeFilter = TypeFilter('SPCO')
-world = Project.World
+type_filter = TypeFilter('SPCO')
+world_element = Project.World
 
-col = DbElementCollection(world, typeFilter)
+element_collection = DbElementCollection(world_element, type_filter)
 
 # Perform collect.
-spcoList = col.Perform()
+matching_elements = element_collection.Perform()
 ```

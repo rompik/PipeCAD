@@ -6,7 +6,7 @@ kind: Class
 
 # PipeCAD.Database.BaseFilter Class
 
-> Base fitler for DbElementCollection.
+> Base class for filters used by `DbElementCollection`.
 
 ## Requirements
 
@@ -21,4 +21,4 @@ Assembly: python/PipeCAD/Database.pyd
 
 ### `Valid(DbElement)`
 
-Virtual method to check the element is valid for the filter, return True if the element is valid.
+Checks whether the specified element is valid for this filter. This is a virtual method and returns `True` when the element satisfies the filter.

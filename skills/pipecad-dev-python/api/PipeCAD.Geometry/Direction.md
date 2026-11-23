@@ -6,7 +6,7 @@ kind: Class
 
 # PipeCAD.Geometry.Direction Class
 
-> Unit vector in 3D space.
+> Represents a unit vector in 3D space.
 
 ## Requirements
 
@@ -14,60 +14,66 @@ Namespace: PipeCAD.Geometry
 
 Assembly: python/PipeCAD/Geometry.pyd
 
+The examples assume the PipeCAD geometry API is imported:
+
+```py
+from PipeCAD.Geometry import *
+```
+
 ## Properties
 
 ### `X`
 
-X component of the direction.
+Returns the X component of this direction.
 
 ```py
-dir = Direction(1, 0, 0)
-x = dir.X
+direction = Direction(1, 0, 0)
+x_component = direction.X
 ```
 
 ### `Y`
 
-Y component of the direction.
+Returns the Y component of this direction.
 
 ```py
-dir = Direction(1, 0, 0)
-y = dir.Y
+direction = Direction(1, 0, 0)
+y_component = direction.Y
 ```
 
 ### `Z`
 
-Z component of the direction.
+Returns the Z component of this direction.
 
 ```py
-dir = Direction(1, 0, 0)
-z = dir.Z
+direction = Direction(1, 0, 0)
+z_component = direction.Z
 ```
 
 ## Methods
 
 ### `Direction()`
 
-Construct (0, 0, 1) direction.
+Creates a direction with components `(0, 0, 1)`.
 
 ```py
-dir = Direction()
+direction = Direction()
 ```
 
 ### `Direction(x, y, z)`
 
-Construct (x, y, z) direction.
+Creates a direction from the specified `x`, `y`, and `z` components.
 
 ```py
-dir = Direction(1, 2, 3)
+direction = Direction(1, 2, 3)
 ```
 
 ### `IsParallel(dir)`
 
-Return Ture if two direction is parallel.
+Returns `True` if the two directions are parallel.
 
 ```py
-dir1 = Direction(1, 2, 3)
-dir2 = Direction(4, 5, 6)
+first_direction = Direction(1, 2, 3)
+second_direction = Direction(4, 5, 6)
 
-dir1.IsParallel(dir2)
+are_parallel = first_direction.IsParallel(second_direction)
 ```

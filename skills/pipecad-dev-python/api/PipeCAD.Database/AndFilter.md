@@ -6,13 +6,19 @@ kind: Class
 
 # PipeCAD.Database.AndFilter Class
 
-> And fitler for DbElementCollection. You can set several filters to collect elemenet, the elemenet must valid for all the filters.
+> Combines filters so that an element must satisfy each filter.
 
 ## Requirements
 
 Namespace: PipeCAD.Database
 
 Assembly: python/PipeCAD/Database.pyd
+
+The examples assume the PipeCAD database API is imported:
+
+```py
+from PipeCAD.Database import *
+```
 
 ## Properties
 
@@ -21,24 +27,26 @@ Assembly: python/PipeCAD/Database.pyd
 
 ### `AndFilter(filter1, filter2)`
 
-Construct a and filter with two filters.
+Constructs a filter that combines two filters.
 
 ```py
-filter1 = TypeFilter('SPEC')
-filter2 = AttributeStringFilter('Purpose', 'PIPING')
+type_filter = TypeFilter('SPEC')
+purpose_filter = AttributeStringFilter('Purpose', 'PIPING')
 
-andFilter = AndFilter(filter1, filter2)
+combined_filter = AndFilter(type_filter, purpose_filter)
 ```
 
 ### `Add(filter)`
 
-Add filter to the and filter.
+Adds the specified filter to this combined filter.
+
+The existing example uses `AndFilter()` without arguments; that constructor is not documented here.
 
 ```py
-filter1 = TypeFilter('SITE')
-filter2 = AttributeStringFilter('Purpose', 'PIPING')
+type_filter = TypeFilter('SITE')
+purpose_filter = AttributeStringFilter('Purpose', 'PIPING')
 
-andFilter = AndFilter()
-andFilter.Add(filter1)
-andFilter.Add(filter2)
+combined_filter = AndFilter()
+combined_filter.Add(type_filter)
+combined_filter.Add(purpose_filter)
 ```

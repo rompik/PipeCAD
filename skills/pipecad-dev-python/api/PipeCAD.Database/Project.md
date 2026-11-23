@@ -6,7 +6,7 @@ kind: Class
 
 # PipeCAD.Database.Project Class
 
-> Project in PipeCAD database.
+> Represents a PipeCAD project and provides access to project metadata and operations.
 
 ## Requirements
 
@@ -14,68 +14,70 @@ Namespace: PipeCAD.Database
 
 Assembly: python/PipeCAD/Database.pyd
 
+The examples assume PipeCAD is running and a project is open. Run this setup first:
+
+```py
+from PipeCAD.Database import *
+
+current_project = Project.Current
+```
+
 ## Properties
 
 ### `Current`
 
-Static property: Current project instance.
+Static property. Returns the current project instance.
 
 ```py
-proj = Project.Current
+current_project = Project.Current
 ```
 
 ### `Name`
 
-Project name.
+Returns the project name.
 
 ```py
-proj = Project.Current
-proj.Name
+current_project.Name
 ```
 
 ### `Code`
 
-Project Code.
+Returns the project code.
 
 ```py
-proj = Project.Current
-proj.Code
+current_project.Code
 ```
 
 ### `Description`
 
-Project description.
+Returns the project description.
 
 ```py
-proj = Project.Current
-proj.Description
+current_project.Description
 ```
 
 ### `IsOpen`
 
-Check project is opened!
+Returns whether the project is open.
 
 ```py
-proj = Project.Current
-proj.IsOpen
+current_project.IsOpen
 ```
 
 ### `CanUndo`
 
-Test if an undo action is available.
+Returns whether an undo operation is available.
 
 ```py
-proj = Project.Current
-proj.CanUndo
+current_project.CanUndo
 ```
 
 ### `CanRedo`
 
-Test if an redo action is available.
+Returns whether a redo operation is available.
 
 ```py
-proj = Project.Current
-proj.CanRedo
+current_project.CanRedo
 ```
 
 
@@ -83,64 +85,64 @@ proj.CanRedo
 
 ### `GetElement(id)`
 
-Static method to get en Element instance in the project by using id.
+Static method that retrieves the element with the specified ID.
 
 ```py
-elem = Project.Current.GetElement(123)
+element = Project.Current.GetElement(123)
 ```
 
 ### `GetElement(name)`
 
-Static method get en Element instance in the project by using name.
+Static method that retrieves the element with the specified name.
 
 ```py
-elem = Project.Current.GetElement('element-name')
+element = Project.Current.GetElement('element-name')
 ```
 
 ### `Save()`
 
-Save project modifications to database.
+Saves the project's modifications to the database.
 
 ```py
-Project.Current.Save()
+current_project.Save()
 ```
 
 ### `Undo()`
 
-Perform undo.
+Undoes the most recent undoable operation.
 
 ```py
-Project.Current.Undo()
+current_project.Undo()
 ```
 
 ### `Redo()`
 
-Perform redo.
+Redoes the most recently undone operation.
 
 ```py
-Project.Current.Redo()
+current_project.Redo()
 ```
 
 ### `OpenTransaction()`
 
-Start an undo transaction.
+Starts a transaction for grouping project changes into one undoable operation.
 
 ```py
-Project.Current.OpenTransaction()
+current_project.OpenTransaction()
 ```
 
 ### `CommitTransaction()`
 
-Commit an undo transaction.
+Commits the current transaction.
 
 ```py
-Project.Current.CommitTransaction()
+current_project.CommitTransaction()
 ```
 
 ### `AbortTransaction()`
 
-Abort an undo transaction.
+Aborts the current transaction.
 
 ```py
-Project.Current.AbortTransaction()
+current_project.AbortTransaction()
 ```

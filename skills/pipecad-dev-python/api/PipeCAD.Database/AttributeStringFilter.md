@@ -6,13 +6,19 @@ kind: Class
 
 # PipeCAD.Database.AttributeStringFilter Class
 
-> Element string attribute filter.
+> Represents a filter that checks an element attribute using a supplied string value.
 
 ## Requirements
 
 Namespace: PipeCAD.Database
 
 Assembly: python/PipeCAD/Database.pyd
+
+The example assumes the PipeCAD database API is imported:
+
+```py
+from PipeCAD.Database import *
+```
 
 ## Properties
 
@@ -21,8 +27,8 @@ Assembly: python/PipeCAD/Database.pyd
 
 ### `AttributeStringFilter(attrName, checkValue)`
 
-Construct a and filter with attribute name and the check value.
+Constructs a filter from an attribute name and the value to check.
 
 ```py
-stringFilter = AttributeStringFilter('Purpose', 'PIPING')
+purpose_filter = AttributeStringFilter('Purpose', 'PIPING')
 ```

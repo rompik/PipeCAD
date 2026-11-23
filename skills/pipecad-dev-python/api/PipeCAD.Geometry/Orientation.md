@@ -6,13 +6,19 @@ kind: Class
 
 # PipeCAD.Geometry.Orientation Class
 
-> Coordinate System.
+> Represents a coordinate system.
 
 ## Requirements
 
 Namespace: PipeCAD.Geometry
 
 Assembly: python/PipeCAD/Geometry.pyd
+
+The examples assume the PipeCAD geometry API is imported:
+
+```py
+from PipeCAD.Geometry import *
+```
 
 ## Properties
 
@@ -21,35 +27,35 @@ Assembly: python/PipeCAD/Geometry.pyd
 
 ### `Orientation(Direction dx, Direction dy)`
 
-Construct coordinate system by two direction.
+Constructs a coordinate system from two directions.
 
 ```py
-dir1 = Direction(1, 0, 0)
-dir2 = Direction(0, 1, 0)
+x_direction = Direction(1, 0, 0)
+y_direction = Direction(0, 1, 0)
 
-ori = Orientation(dx, dy)
+orientation = Orientation(x_direction, y_direction)
 ```
 
 ### `XDirection()`
 
-Return X direction.
+Returns the X direction of this coordinate system.
 
 ```py
-dir1 = Direction(1, 0, 0)
-dir2 = Direction(0, 1, 0)
+x_direction = Direction(1, 0, 0)
+y_direction = Direction(0, 1, 0)
 
-ori = Orientation(dx, dy)
-dx = ori.XDirection()
+orientation = Orientation(x_direction, y_direction)
+returned_x_direction = orientation.XDirection()
 ```
 
 ### `YDirection()`
 
-Return Y direction.
+Returns the Y direction of this coordinate system.
 
 ```py
-dir1 = Direction(1, 0, 0)
-dir2 = Direction(0, 1, 0)
+x_direction = Direction(1, 0, 0)
+y_direction = Direction(0, 1, 0)
 
-ori = Orientation(dx, dy)
-dy = ori.YDirection()
+orientation = Orientation(x_direction, y_direction)
+returned_y_direction = orientation.YDirection()
 ```
