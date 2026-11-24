@@ -507,6 +507,8 @@ class HeadDetailDialog(QDialog):
     def __init__(self, parent = None):
         QDialog.__init__(self, parent)
 
+        self.branch = None
+
         self.setupUi()
     # __init__
 
@@ -591,17 +593,43 @@ class HeadDetailDialog(QDialog):
 
         self.buttonBox.accepted.connect(self.accept)
         self.buttonBox.rejected.connect(self.reject)
-
-        self.initData()
     # setupUi
 
-    def initData(self):
-        pass
-    # initData
-
     def setBranch(self, branch):
+        self.branch = branch
+
         self.textName.text = branch.Name
         self.textDirection.text = branch.Hdirection.ToString()
+
+        # Bore
+        self.comboBore.clear()
+        self.comboBore.addItem(self.tr('unset'))
+
+        pspec = branch.Pspec
+        if pspec.IsValid:
+            boreDict = dict()
+
+            typeFilter = TypeFilter('SPCO')
+            collection = DbElementCollection(pspec, typeFilter)
+            spcoList = collection.Perform()
+            for spco in spcoList:
+                catref = spco.Catref
+                if catref.IsValid and catref.Gtype == 'TUBE':
+                    param = catref.Param
+                    if len(param) > 0:
+                        boreDict[int(param[0])] = spco
+                    # if
+                # if
+            # for
+
+            for bore in sorted(boreDict):
+                self.comboBore.addItem(bore, boreDict[bore])
+            # for
+        # if
+
+        self.comboBore.currentText = str(int(branch.Hbore))
+
+        # Connection Type
 
         pos = branch.Hposition
         self.textPx.text = str(pos.X)
@@ -610,6 +638,29 @@ class HeadDetailDialog(QDialog):
     # setBranch
 
     def accept(self):
+        if self.branch is None:
+            QMessageBox.warning(self, '', self.tr('Please set branch to modify head detail!'))
+            return
+        # if
+
+        px = float(self.textPx.text)
+        py = float(self.textPy.text)
+        pz = float(self.textPz.text)
+
+        try:
+            Project.Current.OpenTransaction()
+
+            self.branch.Hbore = float(self.comboBore.currentText)
+            self.branch.Hconnect = self.comboConnection.currentText
+            self.branch.Hdirection = Direction(self.textDirection.text)
+            self.branch.Hposition = Position(px, py, pz)
+
+            Project.Current.CommitTransaction()
+        except Exception as ex:
+            QMessageBox.critical(self, '', ex)
+            Project.Current.AbortTransaction()
+        # try
+
         QDialog.accept(self)
     # accept
 # HeadDetailDialog
@@ -662,6 +713,167 @@ class HeadConnectionDialog(QDialog):
 # HeadConnectionDialog
 
 # Branch tail detail.
+class TailDetailDialog(QDialog):
+    def __init__(self, parent = None):
+        QDialog.__init__(self, parent)
+
+        self.branch = None
+
+        self.setupUi()
+    # __init__
+
+    def tr(self, text, comment = None):
+        return QCoreApplication.translate(self.__class__.__name__, text, comment)
+    # tr
+
+    def setupUi(self):
+        self.setWindowTitle(self.tr("Modify Tail Detail"))
+
+        self.verticalLayout = QVBoxLayout(self)
+
+        self.formLayout = QFormLayout()
+
+        # Name
+        self.labelName = QLabel(self.tr('Name:'))
+        self.textName = QLineEdit()
+        self.textName.setMinimumWidth(180)
+        self.textName.setReadOnly(True)
+
+        self.formLayout.setWidget(0, QFormLayout.LabelRole, self.labelName)
+        self.formLayout.setWidget(0, QFormLayout.FieldRole, self.textName)
+
+        # Bore
+        self.labelBore = QLabel(self.tr('Bore:'))
+        self.comboBore = QComboBox()
+
+        self.formLayout.setWidget(1, QFormLayout.LabelRole, self.labelBore)
+        self.formLayout.setWidget(1, QFormLayout.FieldRole, self.comboBore)
+
+        # Connection
+        self.labelConnection = QLabel(self.tr('Connection:'))
+        self.comboConnection = QComboBox()
+
+        self.formLayout.setWidget(2, QFormLayout.LabelRole, self.labelConnection)
+        self.formLayout.setWidget(2, QFormLayout.FieldRole, self.comboConnection)
+
+        # Direction
+        self.labelDirection = QLabel(self.tr('Direction:'))
+        self.textDirection = QLineEdit()
+
+        self.formLayout.setWidget(3, QFormLayout.LabelRole, self.labelDirection)
+        self.formLayout.setWidget(3, QFormLayout.FieldRole, self.textDirection)
+
+        self.verticalLayout.addLayout(self.formLayout)
+
+        self.labelPosition = QLabel(self.tr('Position Wrt World:'))
+        self.verticalLayout.addWidget(self.labelPosition)
+
+        self.linePosition = QFrame()
+        self.linePosition.setFrameShape(QFrame.HLine)
+        self.linePosition.setFrameShadow(QFrame.Sunken)
+        self.verticalLayout.addWidget(self.linePosition)
+
+        # Position
+        self.formLayout = QFormLayout()
+
+        self.labelPx = QLabel(self.tr('X'))
+        self.textPx = QLineEdit()
+        
+        self.formLayout.setWidget(0, QFormLayout.LabelRole, self.labelPx)
+        self.formLayout.setWidget(0, QFormLayout.FieldRole, self.textPx)
+
+        self.labelPy = QLabel(self.tr('Y'))
+        self.textPy = QLineEdit()
+        
+        self.formLayout.setWidget(1, QFormLayout.LabelRole, self.labelPy)
+        self.formLayout.setWidget(1, QFormLayout.FieldRole, self.textPy)
+
+        self.labelPz = QLabel(self.tr('Z'))
+        self.textPz = QLineEdit()
+        
+        self.formLayout.setWidget(2, QFormLayout.LabelRole, self.labelPz)
+        self.formLayout.setWidget(2, QFormLayout.FieldRole, self.textPz)
+
+        self.verticalLayout.addLayout(self.formLayout)
+
+        # Action buttons.
+        self.buttonBox = QDialogButtonBox()
+        self.buttonBox.setStandardButtons(QDialogButtonBox.Ok|QDialogButtonBox.Cancel)
+        self.verticalLayout.addWidget(self.buttonBox)
+
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+    # setupUi
+
+    def setBranch(self, branch):
+        self.branch = branch
+
+        self.textName.text = branch.Name
+        self.textDirection.text = branch.Tdirection.ToString()
+
+        # Bore
+        self.comboBore.clear()
+        self.comboBore.addItem(self.tr('unset'))
+
+        pspec = branch.Pspec
+        if pspec.IsValid:
+            boreDict = dict()
+
+            typeFilter = TypeFilter('SPCO')
+            collection = DbElementCollection(pspec, typeFilter)
+            spcoList = collection.Perform()
+            for spco in spcoList:
+                catref = spco.Catref
+                if catref.IsValid and catref.Gtype == 'TUBE':
+                    param = catref.Param
+                    if len(param) > 0:
+                        boreDict[int(param[0])] = spco
+                    # if
+                # if
+            # for
+
+            for bore in sorted(boreDict):
+                self.comboBore.addItem(bore, boreDict[bore])
+            # for
+        # if
+
+        self.comboBore.currentText = str(int(branch.Tbore))
+
+        # Connection Type
+
+        pos = branch.Tposition
+        self.textPx.text = str(pos.X)
+        self.textPy.text = str(pos.Y)
+        self.textPz.text = str(pos.Z)
+    # setBranch
+
+    def accept(self):
+        if self.branch is None:
+            QMessageBox.warning(self, '', self.tr('Please set branch to modify tail detail!'))
+            return
+        # if
+
+        px = float(self.textPx.text)
+        py = float(self.textPy.text)
+        pz = float(self.textPz.text)
+
+        try:
+            Project.Current.OpenTransaction()
+
+            self.branch.Tbore = float(self.comboBore.currentText)
+            self.branch.Tconnect = self.comboConnection.currentText
+            self.branch.Tdirection = Direction(self.textDirection.text)
+            self.branch.Tposition = Position(px, py, pz)
+
+            Project.Current.CommitTransaction()
+        except Exception as ex:
+            QMessageBox.critical(self, '', ex)
+            Project.Current.AbortTransaction()
+        # try
+
+        QDialog.accept(self)
+    # accept
+# TailDetailDialog
 
 # Branch tail connection.
 
@@ -693,6 +905,7 @@ class BranchWidget(QDockWidget):
 
         self.dlgHeadDetail = HeadDetailDialog(self)
         self.dlgHeadConnection = HeadConnectionDialog(self)
+        self.dlgTailDetail = TailDetailDialog(self)
 
         self.dockContext = QWidget()
         self.verticalLayout = QVBoxLayout(self.dockContext)
@@ -923,7 +1136,7 @@ class BranchWidget(QDockWidget):
 
         self.buttonChangeTail = QPushButton(self.tr("Change"))
         self.buttonChangeTail.setSizePolicy(sizePolicy)
-        #self.buttonChangeTail.clicked.connect(self.changeTailDetail)
+        self.buttonChangeTail.clicked.connect(self.changeTailDetail)
         self.horizontalLayout.addWidget(self.buttonChangeTail)
 
         self.verticalLayout.addLayout(self.horizontalLayout)
@@ -1015,9 +1228,9 @@ class BranchWidget(QDockWidget):
 
         if size > 0:
             if isFirst:
-                self.setCurrentBranch(branches[0])
+                self.tableBranch.setCurrentCell(0, 0)
             else:
-                self.setCurrentBranch(branches[size])
+                self.tableBranch.setCurrentCell(size, 0)
             # if
         # if
     # initBranch
@@ -1145,7 +1358,15 @@ class BranchWidget(QDockWidget):
     # changeHeadConnection
 
     def changeTailDetail(self):
-        pass
+        index = self.tableBranch.currentRow()
+        if index < 0:
+            return
+        # if
+        
+        branch = self.pipe.Members[index]
+
+        self.dlgTailDetail.setBranch(branch)
+        self.dlgTailDetail.show()
     # changeTailDetail
 
     def changeTailConnection(self):
