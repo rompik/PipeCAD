@@ -6,7 +6,7 @@ kind: Class
 
 # PipeCAD.Database.TypeFilter Class
 
-> Represents a filter for elements of specified types.
+> Represents a filter that matches elements of specified types.
 
 ## Requirements
 
@@ -27,7 +27,7 @@ from PipeCAD.Database import *
 
 ### `TypeFilter(type)`
 
-Constructs a filter for the specified element type.
+Creates a filter for the specified element type.
 
 ```py
 type_filter = TypeFilter('SPEC')

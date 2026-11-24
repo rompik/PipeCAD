@@ -34,7 +34,7 @@ current_project = Project.Current
 
 ### `Name`
 
-Returns the project name.
+Returns the name of the current project.
 
 ```py
 current_project.Name
@@ -42,7 +42,7 @@ current_project.Name
 
 ### `Code`
 
-Returns the project code.
+Returns the code of the current project.
 
 ```py
 current_project.Code
@@ -50,7 +50,7 @@ current_project.Code
 
 ### `Description`
 
-Returns the project description.
+Returns the description of the current project.
 
 ```py
 current_project.Description
@@ -58,7 +58,7 @@ current_project.Description
 
 ### `IsOpen`
 
-Returns whether the project is open.
+Returns whether the current project is open.
 
 ```py
 current_project.IsOpen
@@ -66,7 +66,7 @@ current_project.IsOpen
 
 ### `CanUndo`
 
-Returns whether an undo operation is available.
+Returns whether an undo operation is available for the current project.
 
 ```py
 current_project.CanUndo
@@ -74,7 +74,7 @@ current_project.CanUndo
 
 ### `CanRedo`
 
-Returns whether a redo operation is available.
+Returns whether a redo operation is available for the current project.
 
 ```py
 current_project.CanRedo
@@ -88,7 +88,7 @@ current_project.CanRedo
 Static method that retrieves the element with the specified ID.
 
 ```py
-element = Project.Current.GetElement(123)
+element = current_project.GetElement(123)
 ```
 
 ### `GetElement(name)`
@@ -96,7 +96,7 @@ element = Project.Current.GetElement(123)
 Static method that retrieves the element with the specified name.
 
 ```py
-element = Project.Current.GetElement('element-name')
+element = current_project.GetElement('element-name')
 ```
 
 ### `Save()`

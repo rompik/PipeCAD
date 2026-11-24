@@ -67,9 +67,14 @@ current_element.Members
 
 ## Methods
 
-For `SetAttribute` and the getter methods, `attrName` is the attribute's `QueryText` from `Attributes` in `data/MetaData.json`.
-Use a getter that matches the attribute's type. `SetAttribute` supports the value types listed below; the value type should match the attribute's type in `data/MetaData.json`.
-The existing `Weight` examples are retained, but `Weight` is not listed in `data/MetaData.json`; its availability is unconfirmed.
+For `SetAttribute` and the getter methods, `attrName` is the attribute's
+`QueryText` from `Attributes` in `data/MetaData.json`. Use a getter that matches
+the attribute's type. `SetAttribute` supports the value types listed below; the
+value type should match the attribute's type in `data/MetaData.json`.
+
+The existing `Weight` and `Lock` examples are retained, but neither name is
+listed as an attribute `QueryText` in `data/MetaData.json`; their availability
+is unconfirmed.
 
 `Create`, `Delete`, and `SetAttribute` modify project data. To group changes into one undoable operation, use a project transaction as described in the [transaction workflow](../../SKILL.md#10-transactions).
 

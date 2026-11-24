@@ -6,7 +6,7 @@ kind: Class
 
 # PipeCAD.Database.AndFilter Class
 
-> Combines filters so that an element must satisfy each filter.
+> Represents a filter that matches elements satisfying every component filter.
 
 ## Requirements
 
@@ -25,9 +25,18 @@ from PipeCAD.Database import *
 
 ## Methods
 
+### `AndFilter()`
+
+Creates an `AndFilter` without initial component filters. Use `Add(filter)` to
+add filters.
+
+```py
+combined_filter = AndFilter()
+```
+
 ### `AndFilter(filter1, filter2)`
 
-Constructs a filter that combines two filters.
+Creates a filter that combines two filters.
 
 ```py
 type_filter = TypeFilter('SPEC')
@@ -39,8 +48,6 @@ combined_filter = AndFilter(type_filter, purpose_filter)
 ### `Add(filter)`
 
 Adds the specified filter to this combined filter.
-
-The existing example uses `AndFilter()` without arguments; that constructor is not documented here.
 
 ```py
 type_filter = TypeFilter('SITE')
