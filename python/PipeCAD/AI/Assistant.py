@@ -48,29 +48,33 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 # --------------------------------------------------------------------------
 # Qt（仅窗口层用；没有 PythonQt 时核心层照样可用）
 # --------------------------------------------------------------------------
+_qt_available = False
+_qt_import_error = ''
 try:
     from PythonQt.QtCore import Qt, QTimer, QCoreApplication
     from PythonQt.QtGui import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                                 QTextBrowser, QPlainTextEdit, QPushButton,
                                 QSplitter, QMessageBox, QWidget,
                                 QComboBox, QLineEdit)
-    QT_AVAILABLE = True
-    QT_IMPORT_ERROR = ''
+    _qt_available = True
+    _qt_import_error = ''
 except ImportError as _qt_err:
-    QT_AVAILABLE = False
-    QT_IMPORT_ERROR = str(_qt_err)
+    _qt_available = False
+    _qt_import_error = str(_qt_err)
     Qt = None
     QTimer = None
 
     class QDialog(object):
         def __init__(self, parent=None):
             raise RuntimeError('窗口层需要 PythonQt：请在 PipeCAD 内运行，'
-                               '不要用系统 python.exe（%s）' % QT_IMPORT_ERROR)
+                               '不要用系统 python.exe（%s）' % _qt_import_error)
 
     QVBoxLayout = QHBoxLayout = QLabel = QWidget = object
     QTextBrowser = QPlainTextEdit = QPushButton = QSplitter = QMessageBox = object
 
-
+# 公开这些常量供外部代码检查
+QT_AVAILABLE = _qt_available
+QT_IMPORT_ERROR = _qt_import_error
 
 
 # ==========================================================================
@@ -1097,7 +1101,7 @@ class _AsciiOnlyIdnaCodec(object):
         return bytes(input).decode('ascii'), len(input)
 
 
-IDNA_PATCHED = False
+_idna_patched = False
 
 
 def ensure_idna():
@@ -1108,7 +1112,7 @@ def ensure_idna():
     先试真实查找；失败就把 `encodings.idna` 模块**塞进 sys.modules**，
     这样 `import encodings.idna` 与 `codecs.lookup('idna')` 都会命中它。
     '''
-    global IDNA_PATCHED
+    global _idna_patched
     import codecs
     try:
         from encodings import normalize_encoding as normalizer
@@ -1428,6 +1432,7 @@ def make_direction(*args):
     if len(args) == 3:
         if _Direction is None:
             return tuple(float(v) for v in args)
+        # _Direction is not None here, safe to call
         return _Direction(float(args[0]), float(args[1]), float(args[2]))
     raise TypeError('方向需要三个分量，例如 Direction(1, 0, 0) 或 Direction((1, 0, 0))')
 
@@ -1471,6 +1476,7 @@ def make_orientation(direction=None, rotate=0.0, x_direction=None):
         dx, dy = _axes_from_angle(base + float(rotate))
     else:
         dx, dy = x_direction, rotate_z(x_direction, rotate)
+    # _Orientation is not None here (checked at line 1465), safe to call
     return _Orientation(dx, dy)
 
 
@@ -1502,13 +1508,16 @@ def rotate_z(target, degrees):
         if dx is not None:
             ndx = rotate_z(dx, deg)
             ndy = rotate_z(dy, deg) if dy is not None else rotate_z(_axes_from_angle(0)[1], deg)
-            return _Orientation(ndx, ndy)
+            # _Orientation is not None here (checked in make_orientation caller or initialized)
+            if _Orientation is not None:
+                return _Orientation(ndx, ndy)
     vx, vy, vz = _xyz_like(target)
     a = math.radians(deg)
     c, s = math.cos(a), math.sin(a)
     nx, ny = vx * c - vy * s, vx * s + vy * c
     if _Direction is None:
         return (nx, ny, vz)
+    # _Direction is not None here, safe to call
     return _Direction(nx, ny, vz)
 
 
@@ -3265,7 +3274,7 @@ def selfcheck():
             print('     -> 调用模型时自动补一个 ASCII 降级实现，通常无需处理；')
             print('        若仍失败，说明补丁没能生效，见下方 ensure_idna() 结果')
         print('OK   ensure_idna() = %s（%s）'
-              % (ensure_idna(), '已启用降级实现' if IDNA_PATCHED else '使用标准库'))
+              % (ensure_idna(), '已启用降级实现' if _idna_patched else '使用标准库'))
         try:
             cfg_n = load_config()
             base = cfg_n.get('base_url') or ''
