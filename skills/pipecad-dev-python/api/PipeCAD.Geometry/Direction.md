@@ -6,7 +6,7 @@ kind: Class
 
 # PipeCAD.Geometry.Direction Class
 
-> Represents a unit vector in 3D space.
+> Represents a direction in 3D space.
 
 ## Requirements
 
@@ -69,7 +69,7 @@ direction = Direction(1, 2, 3)
 
 ### `IsParallel(dir)`
 
-Returns `True` if the two directions are parallel.
+Accepts a `Direction` and returns a `bool`.
 
 ```py
 first_direction = Direction(1, 2, 3)

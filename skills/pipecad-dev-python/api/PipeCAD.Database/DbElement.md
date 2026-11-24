@@ -14,7 +14,9 @@ Namespace: PipeCAD.Database
 
 Assembly: python/PipeCAD/Database.pyd
 
-The examples assume PipeCAD is running with an open project and a current element. Run this setup before each example; attribute examples require an element that supports the attribute:
+The examples assume PipeCAD is running with an open project and a current
+element. Run this setup before each example; use an element that supports the
+attributes or P-points referenced by that example:
 
 ```py
 from PipeCAD.Database import *
@@ -67,22 +69,19 @@ current_element.Members
 
 ## Methods
 
-For `SetAttribute` and the getter methods, `attrName` is the attribute's
-`QueryText` from `Attributes` in `data/MetaData.json`. Use a getter that matches
-the attribute's type. `SetAttribute` supports the value types listed below; the
-value type should match the attribute's type in `data/MetaData.json`.
-
-The existing `Weight` getter example is retained, but `Weight` is not listed
-as an attribute `QueryText` in `data/MetaData.json`; its availability is
-unconfirmed.
-
 `Connect`, `Create`, `CreateLast`, `Delete`, and `SetAttribute` modify project
 data. To group changes into one undoable operation, use a project transaction
 as described in the [transaction workflow](../../SKILL.md#10-transactions).
 
+`SetAttribute` accepts a `DbAttribute` or string attribute name and supports
+boolean, integer, floating-point, string, and `DbElement` values. It returns
+`None`.
+
 ### `Create(index, type)`
 
-Creates a child element at the specified position and returns it. `index` is the insertion position: values less than or equal to `1` place the element first, and values greater than the number of child elements place it last. `type` is the uppercase short name of the element type from `Types` in `data/MetaData.json`.
+Creates a child element at the specified position and returns a `DbElement`.
+`type` is the element type's short name from `Types` in
+`data/MetaData.json`.
 
 ```py
 new_element = current_element.Create(1, 'SITE')
@@ -150,48 +149,9 @@ current_element.SetAttribute('Name', 'new-name')
 current_element.Name = 'new-name'
 ```
 
-### `SetAttribute(attrName, Direction)`
-
-Sets the named attribute to a direction value.
-
-```py
-direction = Direction(1, 0, 0)
-current_element.SetAttribute('Hdirection', direction)
-
-# Set the attribute directly.
-current_element.Hdirection = direction
-```
-
-### `SetAttribute(attrName, Position)`
-
-Sets the named attribute to a position value.
-
-```py
-position = Position(1, 0, 0)
-current_element.SetAttribute('Position', position)
-
-# Set the attribute directly.
-current_element.Position = position
-```
-
-### `SetAttribute(attrName, Orientation)`
-
-Sets the named attribute to an orientation value.
-
-```py
-x_direction = Direction(1, 0, 0)
-y_direction = Direction(0, 0, 1)
-orientation = Orientation(x_direction, y_direction)
-
-current_element.SetAttribute('Orientation', orientation)
-
-# Set the attribute directly.
-current_element.Orientation = orientation
-```
-
 ### `GetInteger(attrName)`
 
-Returns the named attribute's integer value.
+Accepts a `DbAttribute` or string attribute name and returns an integer.
 
 ```py
 area = current_element.GetInteger('Area')
@@ -200,20 +160,21 @@ area = current_element.GetInteger('Area')
 area = current_element.Area
 ```
 
-### `GetDouble(attrName)`
+### `GetDouble(DbAttribute)`
 
-Returns the named attribute's floating-point value.
+Returns the floating-point value for the specified `DbAttribute`.
 
 ```py
-weight = current_element.GetDouble('Weight')
+pressure_attribute = DbAttribute.GetAttribute('Pressure')
+pressure = current_element.GetDouble(pressure_attribute)
 
 # Read the attribute directly.
-weight = current_element.Weight
+pressure = current_element.Pressure
 ```
 
 ### `GetBool(attrName)`
 
-Returns the named attribute's boolean value.
+Accepts a `DbAttribute` or string attribute name and returns a boolean.
 
 ```py
 is_locked = current_element.GetBool('Lock')
@@ -224,7 +185,7 @@ is_locked = current_element.Lock
 
 ### `GetString(attrName)`
 
-Returns the named attribute's string value.
+Accepts a `DbAttribute` or string attribute name and returns a string.
 
 ```py
 name = current_element.GetString('Name')
@@ -233,48 +194,43 @@ name = current_element.GetString('Name')
 name = current_element.Name
 ```
 
-### `GetElement(attrName)`
+### `GetElement(DbAttribute)`
 
-Returns the `DbElement` referenced by the named attribute.
+Returns the `DbElement` referenced by the specified `DbAttribute`.
 
 ```py
-referenced_element = current_element.GetElement('Ptref')
+element_attribute = DbAttribute.GetAttribute('Ptref')
+referenced_element = current_element.GetElement(element_attribute)
 
 # Read the attribute directly.
 referenced_element = current_element.Ptref
 ```
 
-### `GetPosition(attrName)`
+### `GetPosition(attrName, index, reference)`
 
-Returns the named attribute's position value.
+Overloads accept a `DbAttribute`; a string attribute name and integer index;
+or a string attribute name, integer index, and reference `DbElement`. Each
+returns a `Position`.
 
 ```py
-position = current_element.GetPosition('Aposition')
-
-# Read the attribute directly.
-position = current_element.Aposition
+point_index = 0
+world_element = Project.World
+position = current_element.GetPosition(
+    'Pposition', point_index, world_element
+)
 ```
 
-### `GetDirection(attrName)`
+### `GetDirection(attrName, index, reference)`
 
-Returns the named attribute's direction value.
-
-```py
-direction = current_element.GetDirection('Hdirection')
-
-# Read the attribute directly.
-direction = current_element.Hdirection
-```
-
-### `GetOrientation(attrName)`
-
-Returns the named attribute's orientation value.
+Accepts an attribute name, index, and reference `DbElement`; returns a
+`Direction`.
 
 ```py
-orientation = current_element.GetOrientation('Orientation')
-
-# Read the attribute directly.
-orientation = current_element.Orientation
+point_index = 1
+world_element = Project.World
+direction = current_element.GetDirection(
+    'Pdirection', point_index, world_element
+)
 ```
 
 ### `Connect(toElement, p1, p2)`
@@ -294,4 +250,18 @@ dish.Height = 30
 
 # Connect dish P-point 2 to cylinder P-point 1.
 dish.Connect(cylinder, 2, 1)
+```
+
+## Geometry properties
+
+The examples below assign geometry values through element properties:
+
+```py
+position = Position(1, 0, 0)
+current_element.Position = position
+
+x_direction = Direction(1, 0, 0)
+y_direction = Direction(0, 0, 1)
+orientation = Orientation(x_direction, y_direction)
+current_element.Orientation = orientation
 ```

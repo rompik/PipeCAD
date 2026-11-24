@@ -27,11 +27,11 @@ Be sure to understand these core PipeCAD concepts:
 
 - **`DbElement`**: A handle to a database element used to operate on all data objects. Check whether an element is "null" using the `IsNull` property (`element.IsNull`); do not compare it with null. Before using an element, it is best to check that it is valid with the `IsValid` property.
 
-- **`DbAttribute`**: An attribute identifier. Attribute queries use strings for simplicity, such as `Name`, `Type`, `Owner`, and `Position`.
+- **`DbAttribute`**: An attribute identifier. `DbAttribute.GetAttribute(name)` returns an identifier for the supplied string.
 
 - **`DbElementType`**: An element type identifier. Element type queries use strings for simplicity, such as `SITE`, `ZONE`, and `PIPE`.
 
-- **Attribute values**: Read values directly with methods such as `DbElement.GetAsString/GetBool/GetDouble/GetInteger`. Write values with `SetAttribute(DbAttribute, value)`, which is overloaded for string/int/double/bool/DbElement/DbElement[]/Position/Orientation/Direction and other types.
+- **Attribute values**: `DbElement` provides typed getters such as `GetInteger`, `GetDouble`, `GetBool`, `GetString`, `GetElement`, `GetPosition`, and `GetDirection`, plus `SetAttribute`. Accepted arguments vary by method: for example, `GetDouble` and `GetElement` take a `DbAttribute`, while `GetDirection` takes an attribute name, an index, and a `DbElement`. `SetAttribute` accepts a `DbAttribute` or string name and boolean, integer, floating-point, string, or `DbElement` values. See the API reference for each method's overloads.
 
 For the names, types, and descriptions of all attributes, see `Attributes` in `data/MetaData.json`. For all element types, their attributes, and their hierarchy, see `Types` in `data/MetaData.json`.
 
@@ -53,14 +53,16 @@ from PythonQt.QtCore import *
 from PythonQt.QtGui import *
 
 class HelloDialog(QDialog):
-    def __init__(self, parent = None):
+    def __init__(self, parent=None):
         QDialog.__init__(self, parent)
 
         self.setupUi()
     # __init__
 
-    def tr(self, text, comment = None):
-        return QCoreApplication.translate(self.__class__.__name__, text, comment)
+    def tr(self, text, comment=None):
+        return QCoreApplication.translate(
+            self.__class__.__name__, text, comment
+        )
     # tr
 
     def setupUi(self):
@@ -74,7 +76,9 @@ class HelloDialog(QDialog):
 
         # Action buttons.
         self.buttonBox = QDialogButtonBox()
-        self.buttonBox.setStandardButtons(QDialogButtonBox.Ok|QDialogButtonBox.Cancel)
+        self.buttonBox.setStandardButtons(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        )
         self.verticalLayout.addWidget(self.buttonBox)
 
         self.buttonBox.accepted.connect(self.accept)
@@ -144,19 +148,21 @@ ce = DbElement.Current
 
 ### 4. Create elements
 
-Create a child element with `DbElement.Create(index, type)`. The `index` parameter specifies the new element's position among the child elements. If `index` is less than or equal to 1, the new element is placed first; if `index` is greater than the number of child elements, it is placed last. The second parameter is the element type, specified as an uppercase string using the element type's short name, `ShortName`. See `data/MetaData.json` for element type short names.
+Create a child element with `DbElement.Create(index, type)` or
+`DbElement.CreateLast(type)`. `Create` accepts an insertion index, and `type`
+is the element type's short name from `Types` in `data/MetaData.json`.
 
 ```py
 from PipeCAD.Database import *
 
 # Current element
-ce = DbElement.Current
+current_element = DbElement.Current
 
 # Create an element
-elem = ce.Create(2, 'ZONE')
+created_zone = current_element.Create(2, 'ZONE')
 
-# Create a new element as the first child of the current element
-elem = ce.Create(1, 'SITE')
+# Create another child element
+created_site = current_element.Create(1, 'SITE')
 
 ```
 
@@ -177,12 +183,10 @@ ce.Delete()
 
 ### 6. Read and write attributes
 
-`DbElement` provides two ways to read and write element attributes:
-
-+ Use `GetAttribute()/SetAttribute()`.
-+ Access or set values directly using object property names.
-
-Prefer accessing attributes through object properties. The property name must be the attribute's `QueryText` from `Attributes` in `data/MetaData.json`, using PascalCase.
+Use the typed getter methods and `SetAttribute()` overloads documented for
+`DbElement`. Some getters accept a string name, while others require a
+`DbAttribute` or additional index and reference arguments. Element attributes
+can also be accessed directly as properties, as shown in the examples below.
 
 ```py
 from PipeCAD.Database import *
@@ -206,30 +210,31 @@ ce.Name = 'new-name'
 
 ### 7. Geometry properties
 
-The `DbElement` element has three geometry properties: position (`Position`), direction (`Direction`), and coordinate system (`Orientation`).
+The following example assigns a position and orientation through element
+properties.
 
 ```py
 from PipeCAD.Geometry import *
 from PipeCAD.Database import *
 
 # Current element
-ce = DbElement.Current
+current_element = DbElement.Current
 
 # Create a BOX cuboid
-box = ce.Create(0, 'BOX')
+box_element = current_element.Create(0, 'BOX')
 
 # Set the cuboid dimensions
-box.Xlength = 10
-box.Ylength = 20
-box.Zlength = 6
+box_element.Xlength = 10
+box_element.Ylength = 20
+box_element.Zlength = 6
 
 # Set the cuboid position
-box.Position = Position(0, 10, 200)
+box_element.Position = Position(0, 10, 200)
 
 # Set the cuboid coordinate system
-dx = Direction(0, 1, 0)
-dy = Direction(0, 0, 1)
-box.Orientation = Orientation(dx, dy)
+x_direction = Direction(0, 1, 0)
+y_direction = Direction(0, 0, 1)
+box_element.Orientation = Orientation(x_direction, y_direction)
 
 ```
 
@@ -240,12 +245,12 @@ Use the `DbElementCollection` element collection to filter elements that meet th
 ```py
 from PipeCAD.Database import *
 
-typeFilter = TypeFilter('SITE')
-elem = Project.World
+type_filter = TypeFilter('SITE')
+world_element = Project.World
 
-col = DbElementCollection(elem, typeFilter)
+element_collection = DbElementCollection(world_element, type_filter)
 
-siteList = col.Perform()
+site_elements = element_collection.Perform()
 
 ```
 
@@ -287,10 +292,10 @@ Project.Current.Undo()
 Project.Current.Redo()
 
 # Whether undo is available
-canUndo = Project.Current.CanUndo
+can_undo = Project.Current.CanUndo
 
 # Whether redo is available
-canRedo = Project.Current.CanRedo
+can_redo = Project.Current.CanRedo
 ```
 
 ### 11. Graphics API

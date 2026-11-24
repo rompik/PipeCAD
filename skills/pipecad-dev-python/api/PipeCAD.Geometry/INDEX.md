@@ -11,5 +11,5 @@ source: PipeCAD.Geometry
 | Class | Description | Documentation |
 |-------|-------------|---------------|
 | Position | Represents a position in 3D space. | Position.md |
-| Direction | Represents a unit vector in 3D space. | Direction.md |
+| Direction | Represents a direction in 3D space. | Direction.md |
 | Orientation | Represents a coordinate system. | Orientation.md |
