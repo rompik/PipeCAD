@@ -268,3 +268,24 @@ ori = ce.GetOrientation('Orientation')
 # Get attribute directly.
 ori = ce.Orientation
 ```
+
+### `Connect(toElement, p1, p2)`
+
+Connect this element p-point 1 to toElement p-point 2. This is very useful to connect piping component and equipment primitives/nozzles.
+
+```py
+zone = DbElement.Current
+
+cylinder = zone.CreateLast('CYLI')
+cylinder.Diameter = 100
+cylinder.Height = 500
+
+dish = zone.CreateLast('DISH')
+dish.Diameter = 100
+dish.Radius = 20
+dish.Height = 30
+
+# Connect dish p-point 2 to cylinder p-point 1.
+dish.Connect(cylinder, 2, 1)
+
+```
