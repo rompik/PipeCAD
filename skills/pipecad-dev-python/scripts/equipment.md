@@ -1,4 +1,3 @@
-
 ---
 title: PipeCAD Equipment Example
 description: Use python in PipeCAD to create and modify equipment model example.
