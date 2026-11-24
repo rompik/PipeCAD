@@ -6,7 +6,7 @@ kind: Class
 
 # PipeCAD.Database.DbElement Class
 
-> Methods to read and write data to the element.
+> Represents a database element and provides properties and methods to inspect and modify it.
 
 ## Requirements
 
@@ -14,278 +14,254 @@ Namespace: PipeCAD.Database
 
 Assembly: python/PipeCAD/Database.pyd
 
+The examples assume PipeCAD is running with an open project and a current
+element. Run this setup before each example; use an element that supports the
+attributes or P-points referenced by that example:
+
+```py
+from PipeCAD.Database import *
+from PipeCAD.Geometry import *
+
+current_element = DbElement.Current
+```
+
 ## Properties
 
 ### `Current`
 
-Static property: Project current element.
+Static property. Returns the current element in the project.
 
 ```py
-ce = DbElement.Current
+current_element = DbElement.Current
 ```
 
 ### `Owner`
 
-Owner element of this element.
+Returns the element that owns this element.
 
 ```py
-ce = DbElement.Current
-ce.Owner
+current_element.Owner
 ```
 
 ### `IsNull`
 
-True if this element is null.
+Returns whether this element is null.
 
 ```py
-ce = DbElement.Current
-ce.IsNull
+current_element.IsNull
 ```
 
 ### `IsValid`
 
-True if this element is valid.
+Returns whether this element is valid.
 
 ```py
-ce = DbElement.Current
-ce.IsValid
+current_element.IsValid
 ```
 
 ### `Members`
 
-Get element memeber list
+Returns this element's child elements.
 
 ```py
-ce = DbElement.Current
-ce.Members
+current_element.Members
 ```
 
 ## Methods
 
+`Connect`, `Create`, `CreateLast`, `Delete`, and `SetAttribute` modify project
+data. To group changes into one undoable operation, use a project transaction
+as described in the [transaction workflow](../../SKILL.md#10-transactions).
+
+`SetAttribute` accepts a `DbAttribute` or string attribute name and supports
+boolean, integer, floating-point, string, and `DbElement` values. It returns
+`None`.
+
 ### `Create(index, type)`
 
-Create a new Element at given position in this Element's child list.
+Creates a child element at the specified position and returns a `DbElement`.
+`type` is the element type's short name from `Types` in
+`data/MetaData.json`.
 
 ```py
-ce = DbElement.Current
-elem = ce.Create(1, 'SITE')
+new_element = current_element.Create(1, 'SITE')
+```
+
+### `CreateLast(type)`
+
+Creates a child element at the end of this element's child list and returns it.
+`type` is the uppercase short name of the element type from `Types` in
+`data/MetaData.json`.
+
+```py
+new_element = current_element.CreateLast('CYLI')
 ```
 
 ### `Delete()`
 
-Delete this Element.
+Deletes this element.
 
 ```py
-ce = DbElement.Current
-ce.Delete()
+current_element.Delete()
 ```
 
 ### `SetAttribute(attrName, int)`
 
-Set Attribute on Element as an integer.
+Sets the named attribute to an integer value.
 
 ```py
-ce = DbElement.Current
-ce.SetAttribute('Area', 1)
+current_element.SetAttribute('Area', 1)
 
-# Set attribute directly.
-ce.Area = 1
+# Set the attribute directly.
+current_element.Area = 1
 ```
 
 ### `SetAttribute(attrName, bool)`
 
-Set Attribute on Element as boolean.
+Sets the named attribute to a boolean value.
 
 ```py
-ce = DbElement.Current
-ce.SetAttribute('Lock', True)
+current_element.SetAttribute('Lock', True)
 
-# Set attribute directly.
-ce.Lock = True
+# Set the attribute directly.
+current_element.Lock = True
 ```
 
 ### `SetAttribute(attrName, float)`
 
-Set Attribute on Element as double.
+Sets the named attribute to a floating-point value.
 
 ```py
-ce = DbElement.Current
-ce.SetAttribute('Pressure', 1.36)
+current_element.SetAttribute('Pressure', 1.36)
 
-# Set attribute directly.
-ce.Pressure = 1.36
+# Set the attribute directly.
+current_element.Pressure = 1.36
 ```
 
 ### `SetAttribute(attrName, string)`
 
-Set Attribute on Element as string.
+Sets the named attribute to a string value.
 
 ```py
-ce = DbElement.Current
-ce.SetAttribute('Name', 'new-name')
+current_element.SetAttribute('Name', 'new-name')
 
-# Set attribute directly.
-ce.Name = 'new-name'
-```
-
-### `SetAttribute(attrName, Direction)`
-
-Set Attribute on Element as direction.
-
-```py
-ce = DbElement.Current
-
-dir = Direction(1, 0, 0)
-ce.SetAttribute('Hdirection', dir)
-
-# Set attribute directly.
-ce.Hdirection = dir
-```
-
-### `SetAttribute(attrName, Position)`
-
-Set Attribute on Element as Position.
-
-```py
-ce = DbElement.Current
-
-pos = Position(1, 0, 0)
-ce.SetAttribute('Position', pos)
-
-# Set attribute directly.
-ce.Position = pos
-```
-
-### `SetAttribute(attrName, Orientation)`
-
-Set Attribute on Element as Orientation.
-
-```py
-ce = DbElement.Current
-
-dx = Direction(1, 0, 0)
-dy = Direction(0, 0, 1)
-ori = Orientation(dx, dy)
-
-ce.SetAttribute('Orientation', ori)
-
-# Set attribute directly.
-ce.Orientation = ori
+# Set the attribute directly.
+current_element.Name = 'new-name'
 ```
 
 ### `GetInteger(attrName)`
 
-Get integer Attribute value on Element.
+Accepts a `DbAttribute` or string attribute name and returns an integer.
 
 ```py
-ce = DbElement.Current
-area = ce.GetInteger('Area')
+area = current_element.GetInteger('Area')
 
-# Get attribute directly.
-area = ce.Area
+# Read the attribute directly.
+area = current_element.Area
 ```
 
-### `GetDouble(attrName)`
+### `GetDouble(DbAttribute)`
 
-Get floating-point Attribute value on Element.
+Returns the floating-point value for the specified `DbAttribute`.
 
 ```py
-ce = DbElement.Current
-w = ce.GetDouble('Weight')
+pressure_attribute = DbAttribute.GetAttribute('Pressure')
+pressure = current_element.GetDouble(pressure_attribute)
 
-# Get attribute directly.
-w = ce.Weight
+# Read the attribute directly.
+pressure = current_element.Pressure
 ```
 
 ### `GetBool(attrName)`
 
-Get boolean Attribute value on Element.
+Accepts a `DbAttribute` or string attribute name and returns a boolean.
 
 ```py
-ce = DbElement.Current
-lock = ce.GetBool('Lock')
+is_locked = current_element.GetBool('Lock')
 
-# Get attribute directly.
-lock = ce.Lock
+# Read the attribute directly.
+is_locked = current_element.Lock
 ```
 
 ### `GetString(attrName)`
 
-Get text value Attribute on Element.
+Accepts a `DbAttribute` or string attribute name and returns a string.
 
 ```py
-ce = DbElement.Current
-name = ce.GetString('Name')
+name = current_element.GetString('Name')
 
-# Get attribute directly.
-name = ce.Name
+# Read the attribute directly.
+name = current_element.Name
 ```
 
-### `GetElement(attrName)`
+### `GetElement(DbAttribute)`
 
-Get Ref attribute on an Element.
+Returns the `DbElement` referenced by the specified `DbAttribute`.
 
 ```py
-ce = DbElement.Current
-ptref = ce.GetElement('Ptref')
+element_attribute = DbAttribute.GetAttribute('Ptref')
+referenced_element = current_element.GetElement(element_attribute)
 
-# Get attribute directly.
-ptref = ce.Ptref
+# Read the attribute directly.
+referenced_element = current_element.Ptref
 ```
 
-### `GetPosition(attrName)`
+### `GetPosition(attrName, index, reference)`
 
-Get position attribute on an Element.
+Overloads accept a `DbAttribute`; a string attribute name and integer index;
+or a string attribute name, integer index, and reference `DbElement`. Each
+returns a `Position`.
 
 ```py
-ce = DbElement.Current
-pos = ce.GetPosition('Aposition')
-
-# Get attribute directly.
-pos = ce.Aposition
+point_index = 0
+world_element = Project.World
+position = current_element.GetPosition(
+    'Pposition', point_index, world_element
+)
 ```
 
-### `GetDirection(attrName)`
+### `GetDirection(attrName, index, reference)`
 
-Get direction attribute on an Element.
-
-```py
-ce = DbElement.Current
-dir = ce.GetDirection('Hdirection')
-
-# Get attribute directly.
-dir = ce.Hdirection
-```
-
-### `GetOrientation(attrName)`
-
-Get orientation attribute on an Element.
+Accepts an attribute name, index, and reference `DbElement`; returns a
+`Direction`.
 
 ```py
-ce = DbElement.Current
-ori = ce.GetOrientation('Orientation')
-
-# Get attribute directly.
-ori = ce.Orientation
+point_index = 1
+world_element = Project.World
+direction = current_element.GetDirection(
+    'Pdirection', point_index, world_element
+)
 ```
 
 ### `Connect(toElement, p1, p2)`
 
-Connect this element p-point 1 to toElement p-point 2. This is very useful to connect piping component and equipment primitives/nozzles.
+Connects P-point `p1` of this element to P-point `p2` of `toElement`
+(`DbElement`). The point identifiers accept integers. Returns `None`.
 
 ```py
-zone = DbElement.Current
-
-cylinder = zone.CreateLast('CYLI')
+cylinder = current_element.CreateLast('CYLI')
 cylinder.Diameter = 100
 cylinder.Height = 500
 
-dish = zone.CreateLast('DISH')
+dish = current_element.CreateLast('DISH')
 dish.Diameter = 100
 dish.Radius = 20
 dish.Height = 30
 
-# Connect dish p-point 2 to cylinder p-point 1.
+# Connect dish P-point 2 to cylinder P-point 1.
 dish.Connect(cylinder, 2, 1)
+```
 
+## Geometry properties
+
+The examples below assign geometry values through element properties:
+
+```py
+position = Position(1, 0, 0)
+current_element.Position = position
+
+x_direction = Direction(1, 0, 0)
+y_direction = Direction(0, 0, 1)
+orientation = Orientation(x_direction, y_direction)
+current_element.Orientation = orientation
 ```

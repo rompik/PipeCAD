@@ -8,8 +8,8 @@ source: PipeCAD.Geometry
 
 ## Classes
 
-| 类名 | 描述 | 文档 |
-|------|-----|------|
-| Position | Position in 3D space. | Position.md |
-| Direction | Unit vector in 3D space. | Direction.md |
-| Orientation | Coordinate System. | Orientation.md |
+| Class | Description | Documentation |
+|-------|-------------|---------------|
+| Position | Represents a position in 3D space. | Position.md |
+| Direction | Represents a direction in 3D space. | Direction.md |
+| Orientation | Represents a coordinate system. | Orientation.md |

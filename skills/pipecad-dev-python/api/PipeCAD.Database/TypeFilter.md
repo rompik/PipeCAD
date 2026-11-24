@@ -6,13 +6,19 @@ kind: Class
 
 # PipeCAD.Database.TypeFilter Class
 
-> Type fitler for DbElementCollection.
+> Represents a filter that matches elements of specified types.
 
 ## Requirements
 
 Namespace: PipeCAD.Database
 
 Assembly: python/PipeCAD/Database.pyd
+
+The example assumes the PipeCAD database API is imported:
+
+```py
+from PipeCAD.Database import *
+```
 
 ## Properties
 
@@ -21,18 +27,18 @@ Assembly: python/PipeCAD/Database.pyd
 
 ### `TypeFilter(type)`
 
-Construct a type filter with the given element type string.
+Creates a filter for the specified element type.
 
 ```py
-typeFilter = TypeFilter('SPEC')
+type_filter = TypeFilter('SPEC')
 ```
 
 ### `Add(type)`
 
-Add element type for the filter.
+Adds an element type to this filter.
 
 ```py
-typeFilter = TypeFilter('SPEC')
-typeFilter.Add('SELE')
-typeFitler.Add('SPCO')
+type_filter = TypeFilter('SPEC')
+type_filter.Add('SELE')
+type_filter.Add('SPCO')
 ```

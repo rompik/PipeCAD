@@ -1,66 +1,68 @@
 ---
 name: pipecad-dev-python
-description: PipeCAD Python 二次开发专家技能。当用户需要编写、调试、解释或审查PipeCAD Python代码--数据访问、元素创建/删除/遍历、属性读写、几何与位置计算、数据库事件处理时，务必使用本技能。
+description: Expert skill for PipeCAD Python development. Use this skill whenever the user needs to write, debug, explain, or review PipeCAD Python code for data access, element creation/deletion/iteration, attribute reading and writing, geometry and position calculations, or database event handling.
 metadata:
   suite: pipecad-dev-skills
   version: "0.1.0"
 ---
 
-# PipeCAD Python 开发指南
+# PipeCAD Python Development Guide
 
-帮助用户使用 PipeCAD 的 Python 接口进行二次开发：查找 API、编写代码、解释现有代码。
+Help users with PipeCAD Python API development: find APIs, write code, and explain existing code.
 
-## 使用流程
+## Workflow
 
-**确定命名空间**：先判断任务属于哪个领域，对应命名空间如下：
+**Determine the namespace**: First identify the relevant area and its namespace:
 
-   | 领域 | 命名空间 | 关键类型 |
+   | Area | Namespace | Key types |
    |------|----------|----------|
-   | 独立应用入口 | `PipeCAD.Standalone` | `Standalone` |
-   | 项目/数据库 | `PipeCAD.Database` | `Project`, `DbElement`, `DbAttribute`, `DbElementType`, `BaseFilter`, `TypeFilter`, `DbElementCollection` |
-   | 几何（点/线/面/方向） | `PipeCAD.Geometry` | `Position`, `Orientation`, `Direction`, `Line`, `Plane`, `LimitsBox`, `Axis` |
-   | 图形接口 | `PipeCAD.Graphics` | `DrawListManager`, `DrawList`, `Colour`, `Aid` |
+   | Standalone application entry point | `PipeCAD.Standalone` | `Standalone` |
+   | Project/database | `PipeCAD.Database` | `Project`, `DbElement`, `DbAttribute`, `DbElementType`, `BaseFilter`, `TypeFilter`, `DbElementCollection` |
+   | Geometry (points/lines/planes/directions) | `PipeCAD.Geometry` | `Position`, `Orientation`, `Direction`, `Line`, `Plane`, `LimitsBox`, `Axis` |
+   | Graphics interface | `PipeCAD.Graphics` | `DrawListManager`, `DrawList`, `Colour`, `Aid` |
 
-## 核心概念
+## Core concepts
 
-务必理解 PipeCAD 中的核心概念：
+Be sure to understand these core PipeCAD concepts:
 
-- **`DbElement`**：数据库元素的句柄，操作所有的数据对象。判断"空"元素必须用 `IsNull` 属性（`element.IsNull`），不能与 null 比较。使用之前最好使用属性先判断是否有效 `IsValid`。
+- **`DbElement`**: A handle to a database element used to operate on all data objects. Check whether an element is "null" using the `IsNull` property (`element.IsNull`); do not compare it with null. Before using an element, it is best to check that it is valid with the `IsValid` property.
 
-- **`DbAttribute`**：属性标识，为了简化属性的查询，统一使用字符串。如 `Name`, `Type`, `Owner`, `Position`等。
+- **`DbAttribute`**: An attribute identifier. `DbAttribute.GetAttribute(name)` returns an identifier for the supplied string.
 
-- **`DbElementType`**：元素类型标识，为了简化类型的查询，统一使用字符串。如 `SITE`, `ZONE`, `PIPE`等。
+- **`DbElementType`**: An element type identifier. Element type queries use strings for simplicity, such as `SITE`, `ZONE`, and `PIPE`.
 
-- **属性值**：用 `DbElement.GetAsString/GetBool/GetDouble/GetInteger` 等直接取；写值用 `SetAttribute(DbAttribute, 值)`，重载覆盖 string/int/double/bool/DbElement/DbElement[]/Position/Orientation/Direction 等。
+- **Attribute values**: `DbElement` provides typed getters such as `GetInteger`, `GetDouble`, `GetBool`, `GetString`, `GetElement`, `GetPosition`, and `GetDirection`, plus `SetAttribute`. Accepted arguments vary by method: for example, `GetDouble` and `GetElement` take a `DbAttribute`, while `GetDirection` takes an attribute name, an index, and a `DbElement`. `SetAttribute` accepts a `DbAttribute` or string name and boolean, integer, floating-point, string, or `DbElement` values. See the API reference for each method's overloads.
 
-所有属性的名称，类型及描述请查看 `data/MetaData.json` 中的 `Attributes`，所有元素类型、包含的属性及层级关系请查看 `data/MetaData.json`中的 `Types`。
+For the names, types, and descriptions of all attributes, see `Attributes` in `data/MetaData.json`. For all element types, their attributes, and their hierarchy, see `Types` in `data/MetaData.json`.
 
-## 任务模式
+## Task patterns
 
-### 1. GUI开发
+### 1. GUI development
 
-用户界面开发主要使用 `PythonQt`，语法与 `PySide` 和 `PyQt` 类似， 即 `Qt` 中界面相关的类和功能都可以使用。需要引入 `PythonQt` 相应的库：
+User interfaces are primarily developed with `PythonQt`, whose syntax is similar to `PySide` and `PyQt`. This means Qt's UI-related classes and features can be used. Import the corresponding `PythonQt` libraries:
 
 ```py
 from PythonQt.QtCore import *
 from PythonQt.QtGui import *
 ```
 
-下面代码示例为一个简单的窗口实现：
+The following code demonstrates a simple window:
 
 ```py
 from PythonQt.QtCore import *
 from PythonQt.QtGui import *
 
 class HelloDialog(QDialog):
-    def __init__(self, parent = None):
+    def __init__(self, parent=None):
         QDialog.__init__(self, parent)
 
         self.setupUi()
     # __init__
 
-    def tr(self, text, comment = None):
-        return QCoreApplication.translate(self.__class__.__name__, text, comment)
+    def tr(self, text, comment=None):
+        return QCoreApplication.translate(
+            self.__class__.__name__, text, comment
+        )
     # tr
 
     def setupUi(self):
@@ -74,7 +76,9 @@ class HelloDialog(QDialog):
 
         # Action buttons.
         self.buttonBox = QDialogButtonBox()
-        self.buttonBox.setStandardButtons(QDialogButtonBox.Ok|QDialogButtonBox.Cancel)
+        self.buttonBox.setStandardButtons(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        )
         self.verticalLayout.addWidget(self.buttonBox)
 
         self.buttonBox.accepted.connect(self.accept)
@@ -84,7 +88,7 @@ class HelloDialog(QDialog):
 # HelloDialog
 ```
 
-对于用户界面上需要被翻译的字符串，必须实现 `tr()` 函数，需要翻译的字符必须使用英文，并调用 `self.tr()`。将上述代码保存为 `PipeCAD/python/Design/General/Hello.py`，在 `PipeCAD` 中的命令窗口中输入以下命令即可以显示出界面窗口：
+For strings in the user interface that need to be translated, implement the `tr()` function. The translatable strings must be in English and passed to `self.tr()`. Save the code above as `PipeCAD/python/Design/General/Hello.py`, then enter the following commands in the PipeCAD command window to display the UI:
 
 ```py
 from PipeCAD.Design.General import Hello
@@ -94,213 +98,214 @@ dlg.show()
 
 ```
 
-`PipeCAD` 语言切换使用环境变量 `PIPECAD_LANG=zh_CN` 来控制。根据环境变量的值到 `i18n` 文件件查找相应的 `zh_CN.qm` 文件从而将软件界面语言切换到相应的语言上。提供两个批处理文件来处理文字的翻译，`lupdate.bat`和`lrelease.bat`，一个是从 `Python` 文件中更新翻译，一个是将翻译好的 `ts` 文件发布到 `i18n` 中的 `qm` 文件。
+PipeCAD uses the `PIPECAD_LANG` environment variable to select the interface language. For `PIPECAD_LANG=zh_CN`, it looks for `zh_CN.qm` in the `i18n` directory. Two batch files support translation: `lupdate.bat` updates translations from Python files, and `lrelease.bat` compiles translated `ts` files into `qm` files in `i18n`.
 
-### 2. 项目接口
+### 2. Project API
 
 ```py
 from PipeCAD.Database import *
 
-# 当前打开的项目
+# Currently open project
 project = Project.Current
 
-# 项目名称
+# Project name
 name = project.Name
 
-# 项目代号
+# Project code
 code = project.Code
 
-# 项目描述
+# Project description
 desc = project.Description
 
-# 保存
+# Save
 project.Save()
 
-# World 根结点元素
+# World root element
 world = Project.World
 
 ```
 
-### 3. 查找元素
+### 3. Find elements
 
-提供两种查找元素的方法：根据元素ID和名称字符串。对于查找到的元素，使用之前必须使用属性 `IsValid` 进行检查。通过 `DbElement.Current` 来获取当前元素。
+There are two ways to find elements: by element ID or by name string. Before using a found element, check it with the `IsValid` property. Use `DbElement.Current` to get the current element.
 
 ```py
 from PipeCAD.Database import *
 
-# 通过元素唯一ID来查找
+# Find by unique element ID
 elem = Project.GetElement(123)
 
-# 通过元素名称来查找
+# Find by element name
 elem = Project.GetElement('name')
 
-# 检查元素是否有效
+# Check whether the element is valid
 elem.IsValid
 
-# 获取当前元素
+# Get the current element
 ce = DbElement.Current
 
 ```
 
-### 4. 创建元素
+### 4. Create elements
 
-通过 `DbElement.Create(index, type)` 来创建成员元素。其中 `index` 参数为创建的新元素在成员元素中的位置。当 `index` 小于等于1时，新元素位于第一个；当 `index` 大于成员元素个数时，新元素位于最后一个。第二个参数为元素类型，使用大写字符串，并且使用元素类型的简称 `ShortName`，元素类型简称请参考： `data/MetaData.json` 。
+Create a child element with `DbElement.Create(index, type)` or
+`DbElement.CreateLast(type)`. `Create` accepts an insertion index, and `type`
+is the element type's short name from `Types` in `data/MetaData.json`.
 
 ```py
 from PipeCAD.Database import *
 
-# 当前元素
-ce = DbElement.Current
+# Current element
+current_element = DbElement.Current
 
-# 创建元素
-elem = ce.Create(2, 'ZONE')
+# Create an element
+created_zone = current_element.Create(2, 'ZONE')
 
-# 在当前元素的子成员中第一个位置创建新元素
-elem = ce.Create(1, 'SITE')
+# Create another child element
+created_site = current_element.Create(1, 'SITE')
 
 ```
 
-### 5. 删除元素
+### 5. Delete elements
 
-通过 `DbElement.Delete()` 来删除元素。。
+Delete an element with `DbElement.Delete()`.
 
 ```py
 from PipeCAD.Database import *
 
-# 当前元素
+# Current element
 ce = DbElement.Current
 
-# 删除元素
+# Delete the element
 ce.Delete()
 
 ```
 
-### 6. 读写属性
+### 6. Read and write attributes
 
-在 `DbElement` 中为元素属性的读写提供两种方式：
-
-+ 使用 `GetAttribute()/SetAttribute()`；
-+ 直接使用对象属性名称来查询和设值；
-
-优先使用对象属性的方式来读写属性，其中属性的名称必须是在 `data/MetaData.json` 中 `Attributes` 每个属性的 `QueryText`，大驼峰风格的属性名称。
+Use the typed getter methods and `SetAttribute()` overloads documented for
+`DbElement`. Some getters accept a string name, while others require a
+`DbAttribute` or additional index and reference arguments. Element attributes
+can also be accessed directly as properties, as shown in the examples below.
 
 ```py
 from PipeCAD.Database import *
 
-# 当前元素
+# Current element
 ce = DbElement.Current
 
-# 读属性方式1：通过函数根据属性名称来读取属性
+# Read attribute, method 1: use a function with the attribute name
 name = ce.GetString('Name')
 
-# 读属性方式2：使用对象的属性的方式直接读取属性
+# Read attribute, method 2: access it directly as an object property
 name = ce.Name
 
-# 写属性方式1：通过函数根据属性名称来设置属性
+# Write attribute, method 1: use a function with the attribute name
 ce.SetAttribute('Name', 'new-name')
 
-# 写属性方式2：通过对象的属性方式来设置属性
+# Write attribute, method 2: set it directly as an object property
 ce.Name = 'new-name'
 
 ```
 
-### 7. 几何属性
+### 7. Geometry properties
 
-元素 `DbElement` 中包含三个几何属性：位置 Position， 方向 Direction 和 坐标系 Orientation。
+The following example assigns a position and orientation through element
+properties.
 
 ```py
 from PipeCAD.Geometry import *
 from PipeCAD.Database import *
 
-# 当前元素
-ce = DbElement.Current
+# Current element
+current_element = DbElement.Current
 
-# 创建长方体 BOX
-box = ce.Create(0, 'BOX')
+# Create a BOX cuboid
+box_element = current_element.Create(0, 'BOX')
 
-# 设置长方体的尺寸
-box.Xlength = 10
-box.Ylength = 20
-box.Zlength = 6
+# Set the cuboid dimensions
+box_element.Xlength = 10
+box_element.Ylength = 20
+box_element.Zlength = 6
 
-# 设置长方体的位置
-box.Position = Position(0, 10, 200)
+# Set the cuboid position
+box_element.Position = Position(0, 10, 200)
 
-# 设置长方体的坐标系
-dx = Direction(0, 1, 0)
-dy = Direction(0, 0, 1)
-box.Orientation = Orientation(dx, dy)
+# Set the cuboid coordinate system
+x_direction = Direction(0, 1, 0)
+y_direction = Direction(0, 0, 1)
+box_element.Orientation = Orientation(x_direction, y_direction)
 
 ```
 
-### 8. 元素集合
+### 8. Element collections
 
-通过元素集合 `DbElementCollection` 来过滤满足条件的元素集合。
+Use the `DbElementCollection` element collection to filter elements that meet the specified criteria.
 
 ```py
 from PipeCAD.Database import *
 
-typeFilter = TypeFilter('SITE')
-elem = Project.World
+type_filter = TypeFilter('SITE')
+world_element = Project.World
 
-col = DbElementCollection(elem, typeFilter)
+element_collection = DbElementCollection(world_element, type_filter)
 
-siteList = col.Collect()
+site_elements = element_collection.Perform()
 
 ```
 
-### 9. 事件处理
+### 9. Event handling
 
-### 10. 事务机制
+### 10. Transactions
 
-PipeCAD 为数据修改提供事务机制，如果想将增删改的数据修改打包成一次 `Undo` 撤销，可以使用事务机制。在数据改变之前先开启事务 `OpenTransaction`，数据改变完成后，提交事务 `CommitTransaction`。有异常报错时，必须终止事务 `AbortTransaction`。
+PipeCAD provides transactions for data modifications. To group data additions, deletions, and changes into a single `Undo` operation, use a transaction. Start it with `OpenTransaction` before changing data, then commit it with `CommitTransaction` when finished. If an exception occurs, you must abort the transaction with `AbortTransaction`.
 
-相关接口使用如下：
+Use the API as follows:
 
 ```py
 from PipeCAD.Database import *
 
 try:
-    # 开启事务
+    # Start a transaction
     Project.Current.OpenTransaction()
 
-    # 数据增删改
+    # Add, delete, or modify data
     site = DbElement.Current.Create(0, 'SITE')
     site.Name = name
     site.Description = self.textDescription.text
     site.Function = self.textFunction.text
     site.Purpose = self.textPurpose.text
 
-    # 提交事务
+    # Commit the transaction
     Project.Current.CommitTransaction()
 except Exception as ex:
     QMessageBox.critical(self,  '', ex)
 
-    # 当有异常时，必须终止事务
+    # Abort the transaction if an exception occurs
     Project.Current.AbortTransaction()
 # try
 
-# 撤销
+# Undo
 Project.Current.Undo()
 
-# 重做
+# Redo
 Project.Current.Redo()
 
-# 是否可以撤销
-canUndo = Project.Current.CanUndo
+# Whether undo is available
+can_undo = Project.Current.CanUndo
 
-# 是否可以重做
-canRedo = Project.Current.CanRedo
+# Whether redo is available
+can_redo = Project.Current.CanRedo
 ```
 
-### 11. 图形接口
+### 11. Graphics API
 
 
-## 参考文档
+## Reference documentation
 
-完整 API 参考（每个类型的全部成员签名与描述）位于本 skill 的：
+The complete API reference (signatures and descriptions for all members of each type) is located in this skill:
 
-- `api/<Namespace>/INDEX.md` — 每个命名空间的类型索引（含一句话描述）
-- `api/<Namespace>/<完整类型名>.md` — 单个类型文档，包含每个类的名称，功能描述及可用的属性和函数列表。
+- `api/<Namespace>/INDEX.md` — Type index for each namespace, including a one-sentence description.
+- `api/<Namespace>/<FullTypeName>.md` — Single-type documentation containing the class name, a description of its functionality, and a list of available properties and functions.
 
-给出 API 建议后，若用户需要精确签名，务必打开对应类型文档核对，不要凭记忆写。
+After recommending an API, if the user needs an exact signature, be sure to check the corresponding type documentation rather than relying on memory.

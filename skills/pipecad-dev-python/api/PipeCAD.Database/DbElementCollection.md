@@ -6,7 +6,7 @@ kind: Class
 
 # PipeCAD.Database.DbElementCollection Class
 
-> Collect elements by fileters for the given element.
+> Represents a collection that retrieves elements from a given element using a filter.
 
 ## Requirements
 
@@ -14,35 +14,50 @@ Namespace: PipeCAD.Database
 
 Assembly: python/PipeCAD/Database.pyd
 
+The examples assume PipeCAD is running with a project open and the database
+API imported:
+
+```py
+from PipeCAD.Database import *
+```
+
 ## Properties
 
 
 ## Methods
 
-### `DbElementCollection(element, filter)`
+### `DbElementCollection()`
 
-Collect elements by filter for the element.
+Creates a collection without an element or filter.
 
 ```py
-typeFilter = TypeFilter('SPCO')
-world = Project.World
+element_collection = DbElementCollection()
+```
 
-col = DbElementCollection(world, typeFilter)
+### `DbElementCollection(element, filter)`
+
+Creates a collection for the specified source `DbElement` and `BaseFilter`.
+
+```py
+type_filter = TypeFilter('SPCO')
+world_element = Project.World
+
+element_collection = DbElementCollection(world_element, type_filter)
 
 # Perform collect.
-spcoList = col.Perform()
+matching_elements = element_collection.Perform()
 ```
 
 ### `Perform()`
 
-Perform collect and return the element list.
+Collects and returns the matching elements as a `list[DbElement]`.
 
 ```py
-typeFilter = TypeFilter('SPCO')
-world = Project.World
+type_filter = TypeFilter('SPCO')
+world_element = Project.World
 
-col = DbElementCollection(world, typeFilter)
+element_collection = DbElementCollection(world_element, type_filter)
 
 # Perform collect.
-spcoList = col.Perform()
+matching_elements = element_collection.Perform()
 ```
