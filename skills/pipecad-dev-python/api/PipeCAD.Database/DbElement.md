@@ -72,11 +72,13 @@ For `SetAttribute` and the getter methods, `attrName` is the attribute's
 the attribute's type. `SetAttribute` supports the value types listed below; the
 value type should match the attribute's type in `data/MetaData.json`.
 
-The existing `Weight` and `Lock` examples are retained, but neither name is
-listed as an attribute `QueryText` in `data/MetaData.json`; their availability
-is unconfirmed.
+The existing `Weight` getter example is retained, but `Weight` is not listed
+as an attribute `QueryText` in `data/MetaData.json`; its availability is
+unconfirmed.
 
-`Create`, `Delete`, and `SetAttribute` modify project data. To group changes into one undoable operation, use a project transaction as described in the [transaction workflow](../../SKILL.md#10-transactions).
+`Connect`, `Create`, `CreateLast`, `Delete`, and `SetAttribute` modify project
+data. To group changes into one undoable operation, use a project transaction
+as described in the [transaction workflow](../../SKILL.md#10-transactions).
 
 ### `Create(index, type)`
 
@@ -84,6 +86,16 @@ Creates a child element at the specified position and returns it. `index` is the
 
 ```py
 new_element = current_element.Create(1, 'SITE')
+```
+
+### `CreateLast(type)`
+
+Creates a child element at the end of this element's child list and returns it.
+`type` is the uppercase short name of the element type from `Types` in
+`data/MetaData.json`.
+
+```py
+new_element = current_element.CreateLast('CYLI')
 ```
 
 ### `Delete()`
@@ -121,10 +133,10 @@ current_element.Lock = True
 Sets the named attribute to a floating-point value.
 
 ```py
-current_element.SetAttribute('Weight', 1.36)
+current_element.SetAttribute('Pressure', 1.36)
 
 # Set the attribute directly.
-current_element.Weight = 1.36
+current_element.Pressure = 1.36
 ```
 
 ### `SetAttribute(attrName, string)`
@@ -263,4 +275,23 @@ orientation = current_element.GetOrientation('Orientation')
 
 # Read the attribute directly.
 orientation = current_element.Orientation
+```
+
+### `Connect(toElement, p1, p2)`
+
+Connects P-point `p1` of this element to P-point `p2` of `toElement`
+(`DbElement`). The point identifiers accept integers. Returns `None`.
+
+```py
+cylinder = current_element.CreateLast('CYLI')
+cylinder.Diameter = 100
+cylinder.Height = 500
+
+dish = current_element.CreateLast('DISH')
+dish.Diameter = 100
+dish.Radius = 20
+dish.Height = 30
+
+# Connect dish P-point 2 to cylinder P-point 1.
+dish.Connect(cylinder, 2, 1)
 ```

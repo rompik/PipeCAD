@@ -88,7 +88,7 @@ current_project.CanRedo
 Static method that retrieves the element with the specified ID.
 
 ```py
-element = current_project.GetElement(123)
+element = Project.GetElement(123)
 ```
 
 ### `GetElement(name)`
@@ -96,7 +96,7 @@ element = current_project.GetElement(123)
 Static method that retrieves the element with the specified name.
 
 ```py
-element = current_project.GetElement('element-name')
+element = Project.GetElement('element-name')
 ```
 
 ### `Save()`
