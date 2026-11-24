@@ -2,11 +2,10 @@
 """
 PipeCAD AI Assistant - Multilingual Localization System
 
-Система многоязычной поддержки для Assistant.py.
-Автоматически определяет язык пользователя и предоставляет переводы всех строк.
+Provides automatic language detection and translation support for all UI strings.
 
-Использование:
-    l10n = Localization()  # Auto-detect языка ОС
+Usage:
+    l10n = Localization()  # Auto-detect OS language
     message = l10n._("error_metadata_not_found", count=10)
 """
 
@@ -16,18 +15,18 @@ import os
 
 
 class Localization:
-    """Система многоязычной локализации для PipeCAD AI Assistant."""
+    """Multilingual localization system for PipeCAD AI Assistant."""
 
     _instance = None
     _loaded_languages = {}
 
     def __init__(self, language=None, auto_detect=True):
-        """Инициализация локализации.
+        """Initialize localization system.
         
         Args:
-            language: Код языка ('en', 'zh', 'ru', 'de', etc.)
-                     или полное имя локали ('en_US', 'zh_CN', etc.)
-            auto_detect: Если True и language не указан, определить язык ОС
+            language: Language code ('en', 'zh', 'ru', 'de', etc.)
+                     or full locale name ('en_US', 'zh_CN', etc.)
+            auto_detect: If True and language is not specified, auto-detect OS language
         """
         if language is None and auto_detect:
             language = self._detect_system_language()
@@ -37,54 +36,54 @@ class Localization:
     
     @staticmethod
     def _detect_system_language():
-        """Определить язык операционной системы.
+        """Detect operating system language.
         
         Returns:
-            Код языка (e.g., 'en', 'zh', 'ru', 'de')
+            Language code (e.g., 'en', 'zh', 'ru', 'de')
         """
         try:
             lang, _ = locale.getdefaultlocale()
             if lang:
-                # Преобразовать 'zh_CN' -> 'zh', 'en_US' -> 'en'
+                # Convert 'zh_CN' -> 'zh', 'en_US' -> 'en'
                 return lang.split('_')[0].lower()
         except Exception:
             pass
-        return 'en'  # Fallback на английский
+        return 'en'  # Fallback to English
     
     @staticmethod
     def _get_locales_dir():
-        """Получить путь к директории с локализациями.
+        """Get the path to the localization directory.
         
         Returns:
-            Абсолютный путь к папке locales/ рядом с этим модулем
+            Absolute path to locales/ folder next to this module
         """
         module_dir = os.path.dirname(os.path.abspath(__file__))
         return os.path.join(module_dir, 'locales')
     
     @staticmethod
     def _load_strings(language):
-        """Загрузить строки локализации для указанного языка.
+        """Load localization strings for a given language.
         
         Args:
-            language: Код языка ('en', 'zh', 'ru', etc.)
+            language: Language code ('en', 'zh', 'ru', etc.)
         
         Returns:
-            Dict с переводами
+            Dictionary with translations
         """
-        # Кэширование: не загружать дважды
+        # Cache: don't load twice
         if language in Localization._loaded_languages:
             return Localization._loaded_languages[language]
         
         locales_dir = Localization._get_locales_dir()
         lang_file = os.path.join(locales_dir, f'{language}.json')
         
-        # Fallback: если файл не найден, попробовать английский
+        # Fallback: if file not found, try English
         if not os.path.isfile(lang_file):
             if language != 'en':
                 return Localization._load_strings('en')
             lang_file = os.path.join(locales_dir, 'en.json')
         
-        # Fallback: если нет ни одного файла, вернуть пустой словарь
+        # Fallback: if no files exist, return empty dictionary
         if not os.path.isfile(lang_file):
             return {}
         
@@ -94,58 +93,58 @@ class Localization:
             Localization._loaded_languages[language] = strings
             return strings
         except (IOError, json.JSONDecodeError):
-            # Если не смогли загрузить, вернуть пустой словарь
+            # If loading failed, return empty dictionary
             return {}
     
     def _(self, key, **kwargs):
-        """Получить переведённую строку.
+        """Get translated string.
         
         Args:
-            key: Ключ строки в локализационном файле
-            **kwargs: Параметры для форматирования строки
+            key: Translation key from localization file
+            **kwargs: Parameters for string formatting
         
         Returns:
-            Переведённая строка, или ключ если перевод не найден
+            Translated string, or key if translation not found
         """
-        # Получить строку из словаря, или вернуть ключ как fallback
+        # Get string from dictionary, or return key as fallback
         text = self.strings.get(key, key)
         
-        # Форматирование с параметрами (если есть)
+        # Format with parameters (if any)
         try:
             if kwargs:
                 return text.format(**kwargs)
         except (KeyError, ValueError):
-            # Если форматирование не удалось, вернуть оригинальную строку
+            # If formatting failed, return original string
             pass
         
         return text
     
     def set_language(self, language):
-        """Изменить язык на лету.
+        """Change language on the fly.
         
         Args:
-            language: Новый код языка
+            language: New language code
         """
         self.language = language
         self.strings = self._load_strings(language)
     
     def get_language(self):
-        """Получить текущий код языка.
+        """Get current language code.
         
         Returns:
-            Код языка (e.g., 'en', 'zh', 'ru')
+            Language code (e.g., 'en', 'zh', 'ru')
         """
         return self.language
     
     @staticmethod
     def get_instance(language=None):
-        """Получить или создать глобальный экземпляр локализации (singleton).
+        """Get or create global localization instance (singleton).
         
         Args:
-            language: Код языка (опционально)
+            language: Language code (optional)
         
         Returns:
-            Экземпляр Localization
+            Localization instance
         """
         if Localization._instance is None:
             Localization._instance = Localization(language)
@@ -153,14 +152,14 @@ class Localization:
     
     @staticmethod
     def reset_instance():
-        """Сбросить глобальный экземпляр (для тестирования)."""
+        """Reset global instance (for testing)."""
         Localization._instance = None
         Localization._loaded_languages.clear()
 
 
-# Быстрые функции для использования в коде
+# Quick functions for use in code
 def _(key, **kwargs):
-    """Глобальная функция локализации (использует singleton).
+    """Global localization function (uses singleton).
     
     Usage:
         from PipeCAD.AI.Localization import _
@@ -170,7 +169,7 @@ def _(key, **kwargs):
 
 
 def set_language(language):
-    """Установить язык для всего приложения.
+    """Set language for the entire application.
     
     Usage:
         from PipeCAD.AI.Localization import set_language
@@ -180,5 +179,5 @@ def set_language(language):
 
 
 def get_language():
-    """Получить текущий язык приложения."""
+    """Get current language of the application."""
     return Localization.get_instance().get_language()

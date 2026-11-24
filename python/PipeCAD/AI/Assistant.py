@@ -1,33 +1,33 @@
 # -*- coding: utf-8 -*-
 """
-PipeCAD AI Assistant —— 自然语言驱动建模（单文件版）
+PipeCAD AI Assistant —— Natural language-driven modeling (single file version)
 
-一句话链路：用户说人话 → 模型产出受限 Python 脚本 → 静态校验 → 事务执行 → 回读确认。
+Pipeline in a nutshell: user speaks plain language → model outputs constrained Python script → static validation → transaction execution → read-back confirmation.
 
-用法（PipeCAD 命令窗口）：
+Usage (PipeCAD Command Window):
 
     from PipeCAD.AI import Assistant
     Assistant.show()
 
-    # 部署自检（文件、模块、MetaData、模型配置一次查完）
+    # Deployment self-check (check files, modules, MetaData, model config in one go)
     Assistant.selfcheck()
 
-    # 只用核心层，不要窗口
+    # Use core layer only, no window
     core = Assistant.create_core()
     turn = core.plan('建一根 DN200 的管线 P-101')
     if turn.ok:
         print(core.execute(turn.script).summary())
 
-    # 让外部 Agent 通过 HTTP 驱动
+    # Allow external Agent to drive via HTTP
     Assistant.start_bridge(port=8765, token='change-me')
 
-设计上分成五层，彼此只通过函数调用相连，方便单测与替换：
-    Schema 检索 → Prompt → LLM 客户端 → 静态校验 → 事务执行
-窗口层与本地桥只是这五层的两种外壳。
+Designed in five layers, connected only by function calls for easy unit testing and replacement:
+    Schema Retrieval → Prompt → LLM Client → Static Validation → Transaction Execution
+Window layer and local bridge are just two shells for these five layers.
 
-单文件是有意为之：多文件包在部署时少拷一个 .py，
-Python 会报 "cannot import name 'xxx' from 'PipeCAD.AI'"，看起来像代码 bug。
-一个文件拷贝，没有这个坑。
+Single file by design: multi-file packages lose one .py during deployment,
+Python reports "cannot import name 'xxx' from 'PipeCAD.AI'", looks like a code bug.
+Single file copy has no such pitfall.
 """
 
 import ast
@@ -46,7 +46,7 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 # --------------------------------------------------------------------------
-# Qt（仅窗口层用；没有 PythonQt 时核心层照样可用）
+# Qt (window layer only; core layer still works without PythonQt)
 # --------------------------------------------------------------------------
 _qt_available = False
 _qt_import_error = ''
@@ -72,19 +72,19 @@ except ImportError as _qt_err:
     QVBoxLayout = QHBoxLayout = QLabel = QWidget = object
     QTextBrowser = QPlainTextEdit = QPushButton = QSplitter = QMessageBox = object
 
-# 公开这些常量供外部代码检查
+# Expose these constants for external code inspection
 QT_AVAILABLE = _qt_available
 QT_IMPORT_ERROR = _qt_import_error
 
 
 # ==========================================================================
-# Schema 检索（MetaData.json）
+# Schema Retrieval (MetaData.json)
 # ==========================================================================
 
-# 每个类型最多注入多少条属性（超出部分只给名字，避免 token 爆炸）
+# Max attributes per type to inject (extra only get names to avoid token overflow)
 MAX_ATTRS_PER_TYPE = 26
 
-# 几何/标识类属性优先注入，其余按字母序补足
+# Priority injection of geometric/identification attributes, others filled alphabetically
 PRIORITY_ATTRS = [
     'Name', 'Description', 'Type', 'Function', 'Purpose',
     'Position', 'Orientation', 'Direction', 'Hdirection', 'Tdirection',
@@ -92,7 +92,7 @@ PRIORITY_ATTRS = [
     'Height', 'Diameter', 'Ispec', 'Cref', 'Href', 'Tref',
 ]
 
-# 这些属性对建模几乎无用（视图/出图/材料统计），检索时直接丢掉
+# These attributes are nearly useless for modeling (view/drawing/material stats), drop during retrieval
 NOISE_ATTRS = {
     'Fdrawing', 'Frdrawing', 'Cdrg', 'Carea', 'Cnumber', 'Splprefix', 'Dscode',
     'Isohidden', 'Lock', 'Built', 'Shop', 'Erection', 'Safclass', 'Cclass',
@@ -100,7 +100,7 @@ NOISE_ATTRS = {
     'Dmfarray', 'Rlstored', 'Module', 'Fstatus', 'Bstatus', 'Rev', 'DUnion',
 }
 
-# 中文口语 -> 英文关键字的同义词表，用来把"立式罐""弯头"映射到类型名
+# Chinese colloquial -> English keyword synonym table to map equipment names to type names
 CN_HINTS = {
     '罐': ['EQUI', 'CYLI', 'NOZZ'], '容器': ['EQUI', 'CYLI'], '设备': ['EQUI'],
     '泵': ['EQUI'], '换热器': ['EQUI'], '塔': ['EQUI', 'CYLI'],
@@ -114,7 +114,7 @@ CN_HINTS = {
 }
 
 
-# MetaData.json 相对锚点的常见位置（安装包/源码树/构建树各不相同，全试一遍）
+# Common paths for MetaData.json relative anchors (differ in package/source/build, try all)
 METADATA_RELATIVE = (
     'data/MetaData.json',
     'Data/MetaData.json',
@@ -125,7 +125,7 @@ METADATA_RELATIVE = (
     'res/data/MetaData.json',
 )
 
-# 递归扫描时直接跳过的目录（构建产物/版本库/依赖，量大且不会有 MetaData）
+# Directories to skip during recursive scan (build artifacts/repos/deps, large and no MetaData)
 SCAN_JUNK = {
     '.git', '.svn', '.idea', '.vs', '__pycache__', 'node_modules', 'CMakeFiles',
     'obj', 'x64', 'x86', 'Debug', 'RelWithDebInfo', 'MinSizeRel', '.codebuddy',
@@ -159,7 +159,7 @@ def _metadata_roots():
             continue
         add(seed)
         cur = seed
-        for _ in range(7):          # 向上回溯 7 层，覆盖 build/bin/Release 这类层次
+        for _ in range(7):          # Backtrack up to 7 levels to cover build/bin/Release-like hierarchies
             parent = os.path.dirname(os.path.abspath(cur))
             if parent == cur:
                 break
@@ -208,7 +208,7 @@ class MetaData(object):
             raw = json.load(f)
 
         self.types = {}       # ShortName -> type dict
-        self.attr_names = []  # 全部合法属性名（大驼峰 QueryText）
+        self.attr_names = []  # All valid attribute names (UpperCamelCase QueryText)
         for t in raw.get('Types', []):
             sn = t.get('ShortName') or ''
             if sn:
@@ -221,7 +221,7 @@ class MetaData(object):
         self._attr_set = set(self.attr_names)
         self._lower_map = dict((n.lower(), n) for n in self.attr_names)
 
-    # ------------------------------------------------------------------ 定位
+    # ------------------------------------------------------------------ Locating
     @staticmethod
     def _find_metadata():
         '''MetaData.json 随 PipeCAD 安装，按"锚点 + 有界扫描"两段探测。
@@ -237,19 +237,19 @@ class MetaData(object):
                 probes.append(p)
                 if os.path.isfile(p):
                     return p
-            # 有些安装直接把 MetaData.json 放在锚点目录下
+            # Some installations put MetaData.json directly in the anchor directory
             p = os.path.join(root, 'MetaData.json')
             if p not in probes:
                 probes.append(p)
                 if os.path.isfile(p):
                     return p
 
-        # 递归只扫"名字里带 PipeCAD"的锚点：避免把同盘其它目录里旧版本的
-        # MetaData.json 抓进来（schema 对不上时模型会写出这个版本没有的属性）。
+        # Scan only anchors with "PipeCAD" in name: avoid picking up old versions
+        # in other directories on the same disk (mismatched schema causes model to write unsupported attributes)
         roots = _metadata_roots()
         scan_roots = [r for r in roots if 'pipecad' in r.lower()][:10]
         if not scan_roots:
-            scan_roots = roots[:4]      # 兜底：只扫离模块最近的四层
+            scan_roots = roots[:4]      # Fallback: scan only within 4 levels of module proximity
         found = _scan_metadata(scan_roots)
         if found:
             return found
@@ -258,7 +258,7 @@ class MetaData(object):
         raise IOError('未找到 MetaData.json（试过 %d 个位置），'
                       '请设置 PIPECAD_HOME 指向含 data/MetaData.json 的目录' % len(probes))
 
-    # ------------------------------------------------------------------ 检索
+    # ------------------------------------------------------------------ Retrieval
     def search_types(self, text, limit=8):
         '''按自然语言文本粗略检索相关类型，返回 ShortName 列表。'''
         keywords = self._extract_keywords(text)
@@ -276,7 +276,7 @@ class MetaData(object):
                 elif kw_l in desc:
                     score += 10
             if score:
-                # 越"顶层/常用"的类型越优先（成员多说明是装配节点）
+                # Prioritize "top-level/common" types (many members indicate assembly nodes)
                 score += min(len(t.get('MemberTypes') or []), 20) * 0.5
                 scored.append((score, sn))
         scored.sort(key=lambda x: (-x[0], x[1]))
@@ -287,14 +287,14 @@ class MetaData(object):
         for cn, ens in CN_HINTS.items():
             if cn in text:
                 words.extend(ens)
-        # 直接出现的英文类型名（大小写不敏感）
+        # Direct English type names (case insensitive)
         for tok in _tokenize(text):
             up = tok.upper()
             if up in self.types:
                 words.append(up)
             elif tok.lower() in self._lower_map:
                 words.append(tok)
-        # 去重保序
+        # Deduplicate while preserving order
         seen, out = set(), []
         for w in words:
             if w not in seen:
@@ -302,7 +302,7 @@ class MetaData(object):
                 out.append(w)
         return out
 
-    # ------------------------------------------------------------------ 渲染
+    # ------------------------------------------------------------------ Rendering
     def render_type(self, short_name):
         '''把单个类型压成 4~6 行紧凑描述，供 prompt 使用。'''
         t = self.types.get(short_name)
@@ -343,7 +343,7 @@ class MetaData(object):
         '''guard 用：判断属性名对该类型是否合法（含 Owner 继承的通用属性）。'''
         if attr_name in self._attr_set:
             return True
-        # 大小写容错
+        # Case-insensitive tolerance
         if attr_name.lower() in self._lower_map:
             return True
         return False
@@ -395,15 +395,15 @@ def set_metadata(path):
 
 
 # ==========================================================================
-# 技能：PipeCAD/skills/pipecad-dev-python
+# Skill: PipeCAD/skills/pipecad-dev-python
 # ==========================================================================
 #
-# 技能是一份 Markdown + API 参考 + MetaData 的目录。4MB 的 MetaData 不能整体塞进
-# prompt（会直接吃掉整个上下文窗口，模型也读不完），所以这里只做三件事：
-#   1. 启动时索引 SKILL.md 与 api/ 下每个 .md 的标题与摘要（只有几 KB）
-#   2. 按用户这句话召回最相关的片段（SKILL.md 段落 + API 文档索引）
-#   3. 需要精确成员列表时，去技能的 MetaData.json 里查单个类型
-# 检索不到就什么都不注入，绝不让技能拖慢或污染普通对话。
+# Skill is a directory of Markdown + API reference + MetaData. 4MB MetaData cannot fit entirely in
+# the prompt (would consume entire context window and model cannot read), so we do three things:
+#   1. Index SKILL.md and titles/summaries of each .md in api/ at startup (only a few KB)
+#   2. Retrieve most relevant fragments based on user input (SKILL.md sections + API doc index)
+#   3. Query individual types in skill's MetaData.json when precise member list is needed
+# If not found, inject nothing, never let skill slow down or pollute normal conversation
 
 SKILL_NAME = 'pipecad-dev-python'
 SKILL_CACHE = {}
@@ -421,7 +421,7 @@ class SkillPack(object):
         self.metadata_path = ''
         self._loaded = False
 
-    # ------------------------------------------------------------------ 加载
+    # ------------------------------------------------------------------ Loading
     def load(self):
         if self._loaded:
             return self
@@ -453,7 +453,7 @@ class SkillPack(object):
                 break
         return self
 
-    # ------------------------------------------------------------------ 检索
+    # ------------------------------------------------------------------ Retrieval
     def search(self, text, max_sections=2, max_apis=3, budget=3500):
         """按用户输入召回技能片段，返回可直接拼进 prompt 的文本（可能为空）。"""
         self.load()
@@ -494,9 +494,9 @@ class SkillPack(object):
 
         out = []
         if picked:
-            out.append('# 技能参考（%s）\n%s' % (SKILL_NAME, '\n\n'.join(picked)))
+            out.append('# Skill reference（%s）\n%s' % (SKILL_NAME, '\n\n'.join(picked)))
         if api_lines:
-            out.append('# 技能 API 索引（要精确签名时查 api/<类型名>.md）\n'
+            out.append('# Skill API index (check api/<type_name>.md for precise signatures)\n'
                        + '\n'.join(api_lines))
         return '\n\n'.join(out)
 
@@ -537,7 +537,7 @@ class SkillPack(object):
         key = (name or '').strip()
         if not key:
             return []
-        # 依次按短名、类型名精确匹配（大小写敏感在前，宽松在后）
+        # Match in order: short name, type name exactly (case sensitive first, then loose)
         for exact in (True, False):
             for t in types:
                 sn = t.get('ShortName') or ''
@@ -552,8 +552,8 @@ class SkillPack(object):
         return []
 
 
-# 技能检索用的中文词表：用户的自然语言很少直接命中 API 名，
-# 需要把"查元素""读属性""撤销"这类说法映射到 SKILL.md 的章节上。
+# Chinese word list for skill retrieval: user natural language rarely hits API names directly,
+# need to map phrases like "search element" "read property" "undo" to SKILL.md sections
 SKILL_KEYWORDS = {
     '查找': ['查找元素', '过滤器', 'BaseFilter', 'TypeFilter', 'Find'],
     '搜索': ['查找元素', '过滤器', 'BaseFilter', 'TypeFilter'],
@@ -589,7 +589,7 @@ SKILL_KEYWORDS = {
     '画': ['图形接口', 'DrawList', 'DrawListManager'],
 }
 
-# 中文里没列进词表的常见虚词/疑问词，切词时丢掉，避免噪声匹配
+# Common function/question words not listed in word table are dropped during tokenization to avoid noise matching
 STOP_CHARS = set('的了吗呢吧啊是在有和与及或就都也很不个这那什么怎样如何怎么可以要'
                  '请帮我给把从到对为以为其之一个下上里中')
 
@@ -606,7 +606,7 @@ def skill_keywords(text):
         low = w.lower()
         if len(low) >= 2 and low.isascii():
             words.append(low)
-    # 中文连续串：先查词表，再补二元组
+    # Chinese continuous sequences: check word list first, then supplement with bigrams
     for chunk in re.findall(r'[\u4e00-\u9fa5]+', text):
         for word, aliases in SKILL_KEYWORDS.items():
             if word in chunk:
@@ -616,7 +616,7 @@ def skill_keywords(text):
             if pair[0] in STOP_CHARS and pair[1] in STOP_CHARS:
                 continue
             words.append(pair)
-    # 去重保序
+    # Deduplicate while preserving order
     seen = set()
     out = []
     for w in words:
@@ -714,10 +714,10 @@ def skill_status():
 
 
 # ==========================================================================
-# 模型上下文快照
+# Model context snapshot
 # ==========================================================================
 
-MAX_NODES = 120          # 快照最多列多少个元素
+MAX_NODES = 120          # Maximum number of elements to list in snapshot
 MAX_DEPTH = 5            # WORL > SITE > ZONE > PIPE > BRAN
 
 
@@ -741,7 +741,7 @@ def element_path(elem):
         except Exception:
             break
         n = _safe(cur, 'Name', '') or _safe(cur, 'Function', '')
-        if n and str(n) != '/':          # 跳过 WORLD 根节点
+        if n and str(n) != '/':          # Skip WORLD root node
             names.append(str(n))
         cur = _safe(cur, 'Owner', None)
         guard += 1
@@ -809,16 +809,16 @@ def build_context(with_tree=True):
 
 
 # ==========================================================================
-# Prompt 组装
+# Prompt Assembly
 # ==========================================================================
 
 SYSTEM_PROMPT = '''你是 PipeCAD 的建模助手。你的输出会被解析成 Python 代码并在 PipeCAD 里执行。
 
-# 数据库层级（严格遵守）
+# Database Level (must comply strictly)
 WORLD > SITE > ZONE > PIPE > BRANCH > 管件(ELBO/TEE/FLAN/VALV/...)
 EQUIPMENT / STRUCTURE 挂在 ZONE 下；BOX / CYLINDER / NOZZLE 挂在 EQUIPMENT 或 STRUCTURE 下。
 
-# 可用 API
+# Available API
 - Project.Current / Project.World / DbElement.Current 已注入为 Project / world / ce
 - Position(x, y, z) / Direction(x, y, z) / Orientation(dx, dy) 来自 PipeCAD.Geometry
   **Orientation 只接受两个 Direction 对象**：Orientation(Direction(1,0,0), Direction(0,1,0))。
@@ -835,17 +835,17 @@ EQUIPMENT / STRUCTURE 挂在 ZONE 下；BOX / CYLINDER / NOZZLE 挂在 EQUIPMENT
 - builder 函数（优先使用，内部已处理取或建与几何）：
   ensure_site(name)
   ensure_zone(site, name)
-  create_pipe(zone, name, bore=None, spec=None)      # PIPE 是逻辑容器，无几何属性
-  create_branch(pipe, name, head=None, direction=None)  # 几何落在 BRAN 的 Hposition/Hdirection
+  create_pipe(zone, name, bore=None, spec=None)      # PIPE is a logical container with no geometric attributes
+  create_branch(pipe, name, head=None, direction=None)  # Geometry falls in BRAN's Hposition/Hdirection
   create_equipment(zone, name, position=None, function=None, description=None)
   create_box(parent, name, origin, x_length, y_length, z_length, orientation=None)
   create_cylinder(parent, name, base, height, diameter, orientation=None)
   distance(p1, p2) / unit_vector(p1, p2) / segment_lengths(points)
-  make_orientation(direction=None, rotate=0)   # 由方向/绕 Z 角度造 Orientation
-  rotate_z(orientation_or_direction, degrees)  # 绕 Z 旋转
+  make_orientation(direction=None, rotate=0)   # Orientation created from direction/Z-axis rotation angle
+  rotate_z(orientation_or_direction, degrees)  # Rotate around Z axis
   以上函数**已经直接可用，不需要 import**。
 
-# 硬性规则
+# Hard Rules
 0. 上面列出的 builder 函数、Position / Direction / Orientation、Project / world / ce
    都在命名空间里现成可用，**不要为它们写 import**。
    `import ensure_site` 或 `from PipeCAD.Database import ensure_site` 一定会失败，
@@ -864,7 +864,7 @@ EQUIPMENT / STRUCTURE 挂在 ZONE 下；BOX / CYLINDER / NOZZLE 挂在 EQUIPMENT
 8. 元件级管件（ELBO/TEE/FLAN/VALV）需要 spec/catalogue 引用，如果没有明确依据，
    只建到 PIPE/BRANCH 层级，并在说明里指出"元件几何需按项目 spec 补齐"。
 
-# 输出格式
+# Output Format
 Reply in English: first briefly explain in one sentence what you will do, then output
 **exactly one** ```python code block.
 Do not output multiple code blocks or explanatory lists outside the code block.
@@ -872,10 +872,10 @@ Do not output multiple code blocks or explanatory lists outside the code block.
 
 
 def build_system_prompt(schema_text, skill_text=''):
-    prompt = SYSTEM_PROMPT + '\n# 本次相关 schema\n' + (
+    prompt = SYSTEM_PROMPT + '\n# This turn's relevant schema\n' + (
         schema_text or '(未检索到，按通用层级建模)')
     if skill_text:
-        prompt += ('\n\n# 官方开发技能摘录\n'
+        prompt += ('\n\n# Official Development Skill Excerpt\n'
                    '以下是 pipecad-dev-python 技能里与本次需求相关的部分，'
                    'API 用法以它为准；与上面冲突时以技能为准。\n\n' + skill_text)
     return prompt
@@ -908,7 +908,7 @@ def build_messages(user_text, schema_text, model_context, extra='', history=None
 
 
 # ==========================================================================
-# LLM 客户端（OpenAI 兼容）
+# LLM Client (OpenAI compatible)
 # ==========================================================================
 
 DEFAULT_CONFIG = {
@@ -918,7 +918,7 @@ DEFAULT_CONFIG = {
     'temperature': 0.2,
     'timeout': 90,
     'mock': False,
-    'verify_ssl': True,      # 内网代理/自签证书环境可设 false
+    'verify_ssl': True,      # Can be set to false in intranet proxy/self-signed certificate environment
 }
 
 
@@ -945,7 +945,7 @@ def load_config(path=None):
                 break
             except Exception:
                 continue
-    # 环境变量兜底
+    # Environment variable fallback
     if os.environ.get('PIPECAD_AI_KEY'):
         cfg['api_key'] = os.environ['PIPECAD_AI_KEY']
     return cfg
@@ -955,10 +955,10 @@ def init_config(api_key=None, base_url=None, model=None, mock=None, path=None, o
     '''生成/更新模型配置文件，省得手写 json。
 
     from PipeCAD.AI import Assistant
-    Assistant.init_config(api_key='sk-xxx')                 # DeepSeek 默认
-    Assistant.init_config(mock=True)                        # 先不接模型，跑通界面
+    Assistant.init_config(api_key='sk-xxx')                 # DeepSeek default
+    Assistant.init_config(mock=True)                        # Do not connect model yet, run through UI first
     Assistant.init_config(api_key='x', base_url='http://localhost:11434/v1',
-                          model='qwen2.5-coder')            # 本地 Ollama
+                          model='qwen2.5-coder')            # Local Ollama
 
     默认写到 ~/.pipecad_ai.json；路径可用 PIPECAD_AI_CONFIG 或 path 参数改。
     '''
@@ -1005,7 +1005,7 @@ class LLMClient(object):
     def __init__(self, config=None):
         self.config = config or load_config()
 
-    # ------------------------------------------------------------------ 对外
+    # ------------------------------------------------------------------ External Interface
     def chat(self, messages, **overrides):
         if self.config.get('mock'):
             return _mock_reply(messages)
@@ -1024,11 +1024,11 @@ class LLMClient(object):
         }
         data = json.dumps(payload).encode('utf-8')
 
-        # 精简版 Python 缺 idna 编码器时，任何域名都会栽在 host.encode('idna')
+        # Slim Python lacks idna encoder; any domain fails on host.encode('idna')
         idna_ok = ensure_idna()
         safe_url = _ascii_host(url)
 
-        # 用 ASCII 处理过的地址构造 Request，避免 Request 内部再做 idna 编码
+        # Build Request with ASCII-processed address to avoid idna encoding inside Request
         req = urllib.request.Request(safe_url, data=data, method='POST')
         req.add_header('Content-Type', 'application/json')
         req.add_header('Authorization', 'Bearer ' + cfg['api_key'])
@@ -1041,7 +1041,7 @@ class LLMClient(object):
                     ctx.check_hostname = False
                     ctx.verify_mode = ssl.CERT_NONE
             except Exception:
-                ctx = None        # 证书链缺失时退化为默认行为，至少把请求发出去
+                ctx = None        # Fall back to default behavior when certificate chain is missing, at least send the request
 
         try:
             with urllib.request.urlopen(req, timeout=float(cfg.get('timeout', 90)), context=ctx) as r:
@@ -1071,14 +1071,14 @@ def _mock_reply(messages):
 
 
 # ==========================================================================
-# 网络前置：补回被裁掉的 idna 编码器 / 处理 URL 编码问题
+# Network preprocessing: restore removed idna encoder / handle URL encoding issues
 # ==========================================================================
 #
-# PipeCAD 内嵌的 Python 是精简打包，"encodings" 目录里常常没有 idna.py。
-# 而 urllib 在 http.client 里会做 host.encode('idna')，于是纯 ASCII 域名
-# （api.deepseek.com 也一样）都会报：
+# PipeCAD embedded Python is slim-packed; "encodings" directory often lacks idna.py.
+# But urllib does host.encode('idna') in http.client, so pure ASCII domain names
+# (like api.deepseek.com) all fail with:
 #     LookupError: unknown encoding: idna
-# 这里在首次调用模型前把降级用的 'idna' 编码注册回去，让标准库照常工作。
+# Here we register the fallback 'idna' encoding before first model call to let stdlib work normally.
 
 class _AsciiOnlyIdnaCodec(object):
     '''只管 ASCII 域名的 idna 降级实现。
@@ -1144,7 +1144,7 @@ def ensure_idna():
             return codec.decode(input, errors)
 
     def getregentry(name=None):
-        # codecs.register 的回调会被传进编码名；import encodings.idna 时则无参
+        # codecs.register callback receives encoding name; import encodings.idna has no parameters
         if name is not None and normalizer(name) != 'idna':
             return None
         return codecs.CodecInfo(
@@ -1243,17 +1243,17 @@ def _net_error_hint(ex, url, idna_ok=True):
 
 
 # ==========================================================================
-# 确定性建模 builder
+# Deterministic modeling builder
 # ==========================================================================
 
-# --------------------------------------------------------------------- 基础工具
-# 真实的几何类型。builder 与注入命名空间都用下面的安全版本替换它们：
-# 底层是 C++ 绑定，Orientation(120, 0) 这种"数字凑一个坐标系"的写法会直接抛
-# TypeError: incompatible constructor arguments，模型却很容易这么写。
+# --------------------------------------------------------------------- Basic Tools
+# Real geometry types. Builder and injected namespace use the safe versions below:
+# Underlying is C++ binding; Orientation(120, 0) style "numbers make a coordinate" directly throws
+# TypeError: incompatible constructor arguments, but models write it easily.
 try:
     from PipeCAD.Geometry import Direction as _Direction
     from PipeCAD.Geometry import Orientation as _Orientation
-except Exception:                      # 脱离 PipeCAD 时（测试/mock）留空，安全版会退化
+except Exception:                      # When outside PipeCAD (testing/mock) leave empty, safe version will degrade
     _Direction = None
     _Orientation = None
 
@@ -1296,7 +1296,7 @@ def _create(parent, type_name, name=None, index=0):
     return elem
 
 
-# --------------------------------------------------------------------- 层级保证
+# --------------------------------------------------------------------- Hierarchy Guarantee
 def ensure_site(name, world=None):
     '''取或建 SITE。'''
     if world is None:
@@ -1344,7 +1344,7 @@ def create_branch(pipe, name, head=None, direction=None):
     return bran
 
 
-# --------------------------------------------------------------------- 设备/结构
+# --------------------------------------------------------------------- Equipment/Structure
 def create_equipment(zone, name, position=None, function=None, description=None):
     equi = _create(zone, 'EQUI', name)
     if position is not None:
@@ -1379,7 +1379,7 @@ def create_cylinder(parent, name, base, height, diameter, orientation=None):
     return cyl
 
 
-# --------------------------------------------------------------------- 纯几何（无副作用）
+# --------------------------------------------------------------------- Pure Geometry (side-effect-free)
 def distance(p1, p2):
     return math.sqrt(sum((float(a) - float(b)) ** 2 for a, b in zip(_xyz(p1), _xyz(p2))))
 
@@ -1467,7 +1467,7 @@ def make_orientation(direction=None, rotate=0.0, x_direction=None):
     if x_direction is None:
         base = 0.0
         if isinstance(direction, str):
-            # 不认识的方位要报错，不能静默当成"东"——那会让用户以为设上了
+            # Unknown orientation must error, cannot silently assume "East" - would mislead users into thinking it was set
             vx, vy, _vz = _xyz_like(make_direction(direction))
             base = math.degrees(math.atan2(vy, vx))
         elif direction is not None:
@@ -1533,10 +1533,10 @@ def _coerce_orientation(value):
             pass
     if isinstance(value, (tuple, list)):
         if len(value) == 2 and all(isinstance(v, (int, float)) for v in value):
-            # (角度, ...) 这种写法最常见的意思是绕 Z 转角
+            # (angle, ...) style most commonly means rotation around Z
             return make_orientation(rotate=value[0])
         if len(value) == 2:
-            # (方向1, 方向2) -> 直接当两个轴
+            # (direction1, direction2) -> treat directly as two axes
             return _Orientation(make_direction(value[0]), make_direction(value[1]))
     if isinstance(value, str):
         return make_orientation(direction=value)
@@ -1546,13 +1546,13 @@ def _coerce_orientation(value):
 _init_directions()
 
 
-# --------------------------------------------------------------------- 绑定层安全包装
-# 为什么要包：这些是 C++ 绑定类型，构造函数只认精确签名——
+# --------------------------------------------------------------------- Binding Layer Safe Wrapper
+# Why wrap: these are C++ binding types, constructors only accept exact signatures—
 #   Orientation(120, 0)                    -> TypeError: incompatible constructor arguments
 #   Position(x=1, y=2, z=3)                -> TypeError（不支持关键字参数）
 #   Direction(Position(0,0,0), (0,1,0))    -> TypeError
-# 模型几乎必然会这么写一次。与其让它失败再回喂 traceback 重试，不如在入口处把
-# 常见写法都吸附掉；真正不合理的输入仍然抛错，不会被悄悄吞掉。
+# Model will almost certainly write this once. Rather than let it fail and retry with traceback,
+# catch common patterns; truly unreasonable input still throws, won't be silently swallowed.
 try:
     from PipeCAD.Geometry import Position as _Position
 except Exception:
@@ -1569,7 +1569,7 @@ def _safe_position(*args, **kwargs):
         raise TypeError('Position 需要三个分量，例如 Position(0, 0, 0)')
     if not kwargs and len(args) in (0, 3):
         return raw(*args)
-    # 关键字 / 单参数元组 / 单参数 Position：都拆成 xyz 再调原始构造
+    # Keywords / single-param tuple / single-param Position: all decompose to xyz then call original constructor
     if len(args) >= 3:
         return raw(float(args[0]), float(args[1]), float(args[2]))
     if len(args) == 1:
@@ -1608,7 +1608,7 @@ def _safe_orientation(*args, **kwargs):
         if is_dir(a) and isinstance(b, (int, float)):
             return make_orientation(x_direction=a, rotate=float(b))
         if isinstance(a, (int, float)) and isinstance(b, (int, float)):
-            # Orientation(120, 0)：最可能是绕 Z 转角，第二个数多半是笔误/占位
+            # Orientation(120, 0): most likely Z rotation, second number probably typo/placeholder
             return make_orientation(rotate=float(a))
         return raw(make_direction(a), make_direction(b))
     if len(args) == 1:
@@ -1622,17 +1622,17 @@ def _safe_orientation(*args, **kwargs):
         if hasattr(a, 'XDirection'):
             return a
         return raw(make_direction(a))
-    # Orientation(dx, dy, dz) 之类：多半想给一个方向
+    # Orientation(dx, dy, dz) etc: likely wants to give a direction
     if len(args) == 3:
         return make_orientation(direction=args)
     return raw(*args)
 
 
 # ==========================================================================
-# 脚本静态校验（AST 白名单）
+# Script Static Validation (AST Whitelist)
 # ==========================================================================
 
-# 允许的模块前缀（其余 import 一律拒绝）
+# Allowed module prefixes (all other imports rejected)
 ALLOWED_MODULES = ('PipeCAD.Database', 'PipeCAD.Geometry', 'PipeCAD.Graphics', 'math')
 
 FORBIDDEN_NAMES = {
@@ -1646,17 +1646,17 @@ FORBIDDEN_ATTRS = {
     '__bases__', '__mro__', '__code__', '__closure__', '__loader__', '__import__',
 }
 
-# 这些调用会破坏"一次对话=一个事务"的语义，脚本里不允许出现
+# These calls break "one conversation = one transaction" semantics, not allowed in script
 FORBIDDEN_CALLS = {
     'OpenTransaction', 'CommitTransaction', 'AbortTransaction', 'Save',
     'Undo', 'Redo', 'Close', 'Open',
 }
 
-DANGEROUS_CALLS = {'Delete'}  # 允许但要人确认
+DANGEROUS_CALLS = {'Delete'}  # Allowed but requires confirmation
 
-# 几何类型的构造签名：底层是 C++ 绑定，不做隐式转换，参数不对就 TypeError。
-# 这里只为"一眼能看出必错"的写法报 warning（执行期有安全包装会吸附），
-# 目的是让用户在预览阶段就知道脚本有问题，而不是点了执行才失败。
+# Geometry type constructor signatures: underlying C++ binding, no implicit conversion, wrong params = TypeError.
+# Here we only warn on "obviously wrong at a glance" patterns (runtime safe wrapper will catch),
+# goal is for users to know script has issues at preview, not fail after execution.
 GEOM_SIGNATURES = {
     'Orientation': "Orientation(Direction dx, Direction dy)：两个 Direction 对象。"
                    "只想绕 Z 转角度就写 make_orientation(rotate=30)",
@@ -1664,10 +1664,10 @@ GEOM_SIGNATURES = {
     'Position': "Position(x, y, z)：三个数字，例如 Position(0, 0, 0)",
 }
 
-# 这些方法名带几何语义，但签名与「构造一个新几何对象」不同，不能套用上面的检查
+# These methods have geometry semantics but different signature from "construct new geometry", cannot use above checks
 GEOM_NON_CTOR = {'GetPosition', 'GetOrientation', 'GetDirection', 'SetAttribute'}
 
-# builder 函数 -> 它实际创建的元素类型，用于在预览里还原"将创建什么"
+# builder function -> actual element type it creates, used in preview to restore "what will be created"
 BUILDER_TYPES = {
     'ensure_site': 'SITE',
     'ensure_zone': 'ZONE',
@@ -1704,8 +1704,8 @@ class Issue(object):
 class GuardResult(object):
     def __init__(self):
         self.issues = []
-        self.created_types = []   # 计划创建的类型序列，用于预览摘要
-        self.writes = []          # (变量, 属性) 写入，用于预览
+        self.created_types = []   # Planned type sequence to create, used in preview summary
+        self.writes = []          # (variable, attribute) writes, used in preview
         self.tree = None
 
     @property
@@ -1745,7 +1745,7 @@ def check(script, metadata=None):
         if isinstance(node, ast.ClassDef):
             res.issues.append(Issue('warning', node.lineno, '脚本里定义 class 通常没必要'))
 
-    # 同一个节点可能被多处检查命中（如 Call 既属于 Expr 也属于 Assign 的值），去重
+    # Same node may hit multiple checks (e.g., Call part of both Expr and Assign value), deduplicate
     seen, uniq = set(), []
     for i in res.issues:
         key = (i.level, i.line, i.msg)
@@ -1757,9 +1757,9 @@ def check(script, metadata=None):
     return res
 
 
-# --------------------------------------------------------------------- 检查项
-# 这些是"类型/元信息"级别的东西，属于只读，写进去会抛 AttributeError 而不是静默失效。
-# 模型最常犯的是想改元素类型：正确做法是创建时就给 ShortName，或直接用 builder。
+# --------------------------------------------------------------------- Check Items
+# These are "type/metadata" level things, read-only; writing throws AttributeError not silent failure.
+# Model's most common mistake: wanting to change element type. Correct: give ShortName at creation or use builder directly.
 READONLY_META_ATTRS = {
     'ShortName': "元素类型在创建时由 Create(index, 'TYPENAME') 决定，不能事后修改；"
                  "请直接用 create_pipe / create_equipment / create_box 等 builder，"
@@ -1784,7 +1784,7 @@ def _check_import(node, res):
         if getattr(node, 'level', 0):
             res.issues.append(Issue('error', node.lineno, '禁止相对导入'))
         for a in node.names:
-            # 星号导入会把整个模块的符号全灌进来，绕过属性白名单
+            # Star import dumps entire module symbols, bypasses attribute whitelist
             if a.name == '*':
                 res.issues.append(Issue('error', node.lineno,
                                         '禁止 from %s import *，请写明要导入的名字' % mod))
@@ -1801,8 +1801,8 @@ def _check_attr(node, res):
     if node.attr in FORBIDDEN_ATTRS:
         res.issues.append(Issue('error', node.lineno, '禁止访问 %s' % node.attr))
         return
-    # 读取只读元信息同样会抛 AttributeError（例如 x = ce.ShortName），
-    # 这类访问几乎都是模型搞错了用法，直接在校验阶段点出来。
+    # Reading read-only metadata also throws AttributeError (e.g. x = ce.ShortName),
+    # This type of access is almost always model misuse, point out directly in validation.
     if node.attr in READONLY_META_ATTRS:
         res.issues.append(Issue('warning', node.lineno,
                                 '读取 %s 会抛 AttributeError（元素没有这个属性）。%s'
@@ -1867,11 +1867,11 @@ def _geom_call_problem(name, node):
             return ('Orientation 只接受 (Direction, Direction)，收到 %d 个参数。%s'
                     % (n, GEOM_SIGNATURES['Orientation']))
         return ''
-    # Position / Direction：只接受 0 或 3 个数字；2 个数字必错
+    # Position / Direction: accept only 0 or 3 numbers; 2 numbers must be wrong
     if n in (0, 3) or not node.args:
         return ''
     if n == 1 and not node.keywords:
-        return ''       # 单参数（元组 / 字符串）安全包装能处理
+        return ''       # Single parameter (tuple/string) safe wrapper can handle
     if n == 2:
         return ('%s 需要 3 个分量，收到 2 个参数，会报 incompatible constructor arguments。%s'
                 % (name, GEOM_SIGNATURES[name]))
@@ -1889,7 +1889,7 @@ def _short(node):
 def _check_assign(node, res, metadata, var_types):
     '''校验 `elem.Attr = value` 与 `elem.SetAttribute('Attr', v)` 的属性名。'''
     if isinstance(node, ast.Assign):
-        # 链式赋值 `a = b.Attr = v` 的 targets 有两项，每个都可能是属性写入
+        # Chained assignment `a = b.Attr = v` has two targets, each may be attribute write
         for tgt in node.targets:
             if isinstance(tgt, ast.Attribute):
                 owner_type = var_types.get(_root_name(tgt))
@@ -1933,7 +1933,7 @@ def _validate_attr(attr, owner_type, lineno, res, metadata):
                                 '属性 %s 未在 MetaData 中检索到，可能存在拼写错误' % attr))
 
 
-# --------------------------------------------------------------------- 类型推断
+# --------------------------------------------------------------------- Type Inference
 def _root_name(node):
     '''把 a.b.c 形式的最左变量名剥出来。'''
     while isinstance(node, ast.Attribute):
@@ -1958,7 +1958,7 @@ def _infer_var_types(tree):
 
 
 # ==========================================================================
-# 事务执行器
+# Transaction Executor
 # ==========================================================================
 
 ALLOWED_BUILTINS = [
@@ -1973,10 +1973,10 @@ class ExecResult(object):
         self.ok = False
         self.error = ''
         self.traceback = ''
-        self.result = None          # 脚本约定的 result 变量
+        self.result = None          # Script-defined result variable
         self.created = []           # [(path, type, name)]
         self.logs = []
-        self.notes = []             # 自动修正说明（冗余 import / 执行失败后重试）
+        self.notes = []             # Auto-correction notes (redundant imports / retry after execution failure)
         self.repaired_script = ''   # 自动修复后的最终脚本（发生过修复时才有值）
         self.elapsed = 0.0
 
@@ -2034,7 +2034,7 @@ def build_namespace(logs=None):
     from PipeCAD.Database import Project, DbElement
     from PipeCAD.Geometry import Position, Direction, Orientation
 
-    # builder 函数与本模块同文件，直接可用
+    # builder functions in same file as this module, directly usable
     logs = logs if logs is not None else []
 
     def _log(*args):
@@ -2051,7 +2051,7 @@ def build_namespace(logs=None):
         'Position': _safe_position,
         'Direction': make_direction,
         'Orientation': _safe_orientation,
-        # 几何计算下沉到本地函数，模型只填参数，避免它手算坐标与方向
+        # Geometry computation sinks to local functions; model only fills parameters to avoid manual coordinate/direction calculation
         'ensure_site': ensure_site,
         'ensure_zone': ensure_zone,
         'create_pipe': create_pipe,
@@ -2190,13 +2190,13 @@ def run_script(script, dry_run=False):
         return res
 
     # 模型常写 `from PipeCAD.Database import ensure_site` —— 名字是本程序注入的，
-    # 不属于 PipeCAD 模块。执行前先剔掉这类冗余 import，避免白白fail一次。
+    # Not part of PipeCAD module. Remove such redundant imports before execution to avoid unnecessary failure.
     script, stripped = strip_redundant_imports(script)
     if stripped:
         res.notes.extend('Auto-removed redundant import: %s' % n for n in stripped)
 
-    # 几何构造：Orientation(120, 0) 这类写法注入命名空间里的安全版会吸附成合理坐标系，
-    # 但必须让用户知道"你写的不是它理解的"，否则模型会一直这么写下去。
+    # Geometry construction: Orientation(120, 0) style in safe version injected into namespace absorbs into reasonable coordinate system,
+    # But must let user know "what you wrote isn't what it understands", or model keeps writing it.
     try:
         geom_notes = _geom_call_notes(script)
         if geom_notes:
@@ -2315,12 +2315,12 @@ class AIAssistantCore(object):
         self.max_fix_rounds = max_fix_rounds
         self.with_tree = with_tree
         self.history = []        # [(role, content)]
-        # 技能：PipeCAD/skills/pipecad-dev-python。找不到就退化，不报错。
+        # Skill: PipeCAD/skills/pipecad-dev-python. Fall back if not found, don't error.
         self.use_skill = use_skill
         self.skill = skill if skill is not None else (find_skill() if use_skill else None)
         self.last_skill_text = ''    # 最近一次注入的技能片段（界面上可展示）
 
-    # ------------------------------------------------------------------ 规划
+    # ------------------------------------------------------------------ Planning
     def plan(self, user_text, extra='', context_text=None):
         '''生成脚本 + 静态校验（失败自动让模型改一轮）。
 
@@ -2372,7 +2372,7 @@ class AIAssistantCore(object):
         self._remember('assistant', turn.explanation or reply)
         return turn
 
-    # ------------------------------------------------------------------ 执行
+    # ------------------------------------------------------------------ Execution
     def execute(self, script, dry_run=False):
         '''执行脚本。失败时把真实异常回喂模型，自动改一版再执行（最多 max_fix_rounds 轮）。
 
@@ -2420,7 +2420,7 @@ class AIAssistantCore(object):
         _, new_script = split_reply(reply)
         return new_script or ''
 
-    # ------------------------------------------------------------------ 技能
+    # ------------------------------------------------------------------ Skills
     def _skill_context(self, user_text):
         """取技能里与本次需求相关的片段；没有技能或没命中时返回空串。"""
         if not self.skill:
@@ -2439,7 +2439,7 @@ class AIAssistantCore(object):
             return ''
         return self.skill.api_doc(type_name)
 
-    # ------------------------------------------------------------------ 辅助
+    # ------------------------------------------------------------------ Auxiliary
     def preview_summary(self, turn):
         '''Change-preview text: what will be created / modified, and any risky operations.'''
         if not turn.guard:
@@ -2493,7 +2493,7 @@ WELCOME = ('I can turn your description into a PipeCAD model.<br>'
 class AssistantDialog(QDialog):
     def __init__(self, parent=None):
         QDialog.__init__(self, parent)
-        self.parentWindow = parent      # PipeCAD 主窗口；为 None 时是独立窗口
+        self.parentWindow = parent      # PipeCAD main window; None means standalone window
         self.core = None
         self._queue = queue.Queue()
         self._busy = False
@@ -2523,7 +2523,7 @@ class AssistantDialog(QDialog):
 
         outer = QVBoxLayout(self)
 
-        # 去掉了代码预览区：对话日志占满窗口，模型长高一点看得更清楚
+        # Removed code preview area: conversation log fills window, model taller for better visibility
         self.chatView = QTextBrowser()
         outer.addWidget(self.chatView)
 
@@ -2554,7 +2554,7 @@ class AssistantDialog(QDialog):
 
         self.append_html('<b>AI Assistant</b><br>%s' % WELCOME)
 
-    # ------------------------------------------------------------------ 核心
+    # ------------------------------------------------------------------ Core
     def _init_core(self):
         try:
             self.core = create_core()
@@ -2573,7 +2573,7 @@ class AssistantDialog(QDialog):
             self.append_html('<span style="color:#c00">%s</span>'
                              % self.tr('Initialization failed: %s') % ex)
 
-        # MetaData 读不到时窗口仍可用，但要当场说清楚，别等用户点了 Generate 才报错
+        # Window still usable when MetaData unreadable, but explain clearly; don't wait until user clicks Generate to error
         try:
             md = get_metadata()
             self.append_html('<span style="color:#888">%s</span>'
@@ -2601,9 +2601,9 @@ class AssistantDialog(QDialog):
                                        '&lt;PipeCAD install dir&gt;/skills/, or set '
                                        'PIPECAD_SKILLS to the skills directory.'))
 
-    # ------------------------------------------------------------------ 事件
+    # ------------------------------------------------------------------ Events
     def keyPressEvent(self, event):
-        # Qt4/Qt5 枚举名略有差异，取不到就跳过快捷键，不影响正常输入
+        # Qt4/Qt5 enum names differ slightly; skip shortcut if unavailable, doesn't affect normal input
         try:
             enter = event.key() in (Qt.Key_Return, Qt.Key_Enter)
             ctrl = bool(event.modifiers() & Qt.ControlModifier)
@@ -2614,7 +2614,7 @@ class AssistantDialog(QDialog):
             return
         QDialog.keyPressEvent(self, event)
 
-    def on_send(self, *args):        # PythonQt 的 clicked 带 bool 参数，吞掉不用
+    def on_send(self, *args):        # PythonQt clicked passes bool parameter, ignore it
         if self._busy or self.core is None:
             return
         text = self.input.toPlainText().strip()
@@ -2624,7 +2624,7 @@ class AssistantDialog(QDialog):
         self.append_html('<b style="color:#1a6">%s</b>%s'
                          % (self.tr('You:'), _esc(text)))
 
-        # 上下文快照必须在主线程取，再交给工作线程
+        # Context snapshot must be taken on main thread, then passed to worker thread
         try:
             context_text = build_context()
         except Exception as ex:
@@ -2678,7 +2678,7 @@ class AssistantDialog(QDialog):
                              % (self.tr('Script failed validation:'),
                                 _esc(turn.issues_text())))
 
-    def on_execute(self, *args):        # PythonQt 的 clicked 带 bool 参数，吞掉不用
+    def on_execute(self, *args):        # PythonQt clicked passes bool parameter, ignore it
         if not self._turn or not self._turn.executable:
             return
         if self._turn.guard and self._turn.guard.has_warning:
@@ -2712,7 +2712,7 @@ class AssistantDialog(QDialog):
         dlg = SettingsDialog(self)
         if dlg.exec_():
             cfg = dlg.result_config
-            # 写回当前生效的那份配置（没有则用默认 ~/.pipecad_ai.json）
+            # Write back the currently active config (use default ~/.pipecad_ai.json if none)
             target = load_config().get('_source') or None
             init_config(api_key=cfg['api_key'], base_url=cfg['base_url'],
                         model=cfg['model'], path=target, overwrite=True)
@@ -2722,7 +2722,7 @@ class AssistantDialog(QDialog):
                              % (self.tr('Settings saved. Model: %s')
                                 % cfg.get('model', '?')))
 
-    def on_clear(self, *args):        # PythonQt 的 clicked 带 bool 参数，吞掉不用
+    def on_clear(self, *args):        # PythonQt clicked passes bool parameter, ignore it
         self.chatView.clear()
         self.btnExec.setEnabled(False)
         self._turn = None
@@ -2730,7 +2730,7 @@ class AssistantDialog(QDialog):
             self.core.reset()
         self.append_html('<b>AI Assistant</b><br>%s' % WELCOME)
 
-    # ------------------------------------------------------------------ 工具
+    # ------------------------------------------------------------------ Tools
     def _set_busy(self, busy, text):
         self._busy = busy
         self.btnSend.setEnabled(not busy)
@@ -2769,7 +2769,7 @@ def _qt_text(widget):
     return v() if callable(v) else (v or '')
 
 
-# AI 服务预设：(显示名, base_url, model)，Custom 时两项留空由用户手填
+# AI Service Preset: (display name, base_url, model), user fills both when Custom
 AI_PROVIDERS = [
     ('DeepSeek', 'https://api.deepseek.com/v1', 'deepseek-chat'),
     ('OpenAI', 'https://api.openai.com/v1', 'gpt-4o-mini'),
@@ -2837,8 +2837,8 @@ class SettingsDialog(QDialog):
         row.addWidget(btnCancel)
         root.addLayout(row)
 
-        # PythonQt 的 clicked 会带一个 bool 参数，槽必须能吞掉，否则报
-        # "wrong number of arguments"。原窗口的 on_xxx 都是这个写法。
+        # PythonQt clicked passes bool parameter; slot must handle it or error
+        # "wrong number of arguments". Original window on_xxx methods use this pattern.
         btnSave.clicked.connect(self._on_save)
         btnCancel.clicked.connect(self._on_cancel)
 
@@ -2877,7 +2877,7 @@ class SettingsDialog(QDialog):
             if model:
                 self.editModel.setText(model)
 
-    def _on_save(self, *args):        # clicked 带 bool 参数，吞掉不用
+    def _on_save(self, *args):        # clicked passes bool parameter, ignore it
         self.result_config = {
             'api_key': _qt_text(self.editKey).strip(),
             'base_url': _qt_text(self.editUrl).strip(),
@@ -2885,7 +2885,7 @@ class SettingsDialog(QDialog):
         }
         self.accept()
 
-    def _on_cancel(self, *args):      # clicked 带 bool 参数，吞掉不用
+    def _on_cancel(self, *args):      # clicked passes bool parameter, ignore it
         self.reject()
 
     def exec_(self):
@@ -2998,7 +2998,7 @@ def show(parent=None):
             parent = main_window()
         _dialog = AssistantDialog(parent)
     _dialog.show()
-    # raise_ / activateWindow 在个别绑定里名字不同（raise 是 Python 关键字），取不到就跳过
+    # raise_ / activateWindow have different names in some bindings (raise is Python keyword), skip if unavailable
     for name in ('raise_', 'activateWindow'):
         try:
             getattr(_dialog, name)()
@@ -3027,7 +3027,7 @@ class Bridge(object):
         self._server = None
         self._http_thread = None
 
-    # ------------------------------------------------------------------ 生命周期
+    # ------------------------------------------------------------------ Lifecycle
     def start(self, parent=None):
         if self._server is not None:
             return self
@@ -3116,10 +3116,10 @@ class Bridge(object):
             self._server = None
         return self
 
-    # ------------------------------------------------------------------ 主线程
+    # ------------------------------------------------------------------ Main Thread
     def _pump(self):
         '''在主线程把排队中的脚本执行掉。'''
-        for _ in range(4):  # 一次最多处理 4 个，别把界面卡死
+        for _ in range(4):  # Process max 4 at once, don't freeze UI
             try:
                 job = self._jobs.get_nowait()
             except queue.Empty:
