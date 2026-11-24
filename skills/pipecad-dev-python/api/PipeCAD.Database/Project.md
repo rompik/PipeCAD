@@ -86,7 +86,7 @@ proj.CanRedo
 Static method to get en Element instance in the project by using id.
 
 ```py
-elem = Project.Current.GetElement(123)
+elem = Project.GetElement(123)
 ```
 
 ### `GetElement(name)`
@@ -94,7 +94,7 @@ elem = Project.Current.GetElement(123)
 Static method get en Element instance in the project by using name.
 
 ```py
-elem = Project.Current.GetElement('element-name')
+elem = Project.GetElement('element-name')
 ```
 
 ### `Save()`

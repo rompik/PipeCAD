@@ -110,10 +110,10 @@ Set Attribute on Element as double.
 
 ```py
 ce = DbElement.Current
-ce.SetAttribute('Weight', 1.36)
+ce.SetAttribute('Pressure', 1.36)
 
 # Set attribute directly.
-ce.Weight = 1.36
+ce.Pressure = 1.36
 ```
 
 ### `SetAttribute(attrName, string)`

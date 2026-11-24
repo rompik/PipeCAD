@@ -19,6 +19,19 @@ Assembly: python/PipeCAD/Database.pyd
 
 ## Methods
 
+### `AndFilter()`
+
+Construct a and filter without filters. Then you can add filters by `Add(filter)` method.
+
+```py
+filter1 = TypeFilter('SITE')
+filter2 = AttributeStringFilter('Purpose', 'PIPING')
+
+andFilter = AndFilter()
+andFilter.Add(filter1)
+andFilter.Add(filter2)
+```
+
 ### `AndFilter(filter1, filter2)`
 
 Construct a and filter with two filters.
