@@ -19,6 +19,31 @@ PipeCAD Professional Edition is **NOT FREE**, you can send email consult to buy 
 PipeCAD provide customization by Python. The python plugins locate in the python/PipeCAD folder.
 The Python plugins are open source with **MIT** license.
 
+### CAESAR II neutral-file export
+
+`PipeCAD.Design.General.CiiExportDialog.Show()` opens the CII export dialog in
+PipeCAD. Select PIPE or BRAN elements and add their branches, then specify the
+output file and a JSON settings file. The exporter currently accepts connected
+straight `TUBI` elements only. It stops on elbows, fittings, disconnected
+segments, duplicate tubing, missing mappings, and invalid settings rather than
+silently omitting them. Exact matching endpoints share a node; intersections
+inside a segment are not split automatically.
+
+Copy `python/PipeCAD/Design/General/cii_settings.example.json` and replace its
+illustrative values with reviewed values for each `Spref.Name` and `Lbore` pair.
+The test file is disabled unless the dialog's test-settings checkbox is selected.
+The settings specify actual outside diameter and wall thickness, not nominal
+bore; temperatures are in Celsius, pressures and moduli in kPa, dimensions in
+mm, and densities in kg/m³. Every element matching the same specification and
+bore receives the same material and operating values. Set `illustrative` to
+`false` only after review.
+The output uses the version 10 neutral layout of an example confirmed to import
+in CAESAR II 13 or later. Generated files have not yet been verified by an
+application round trip: they are import candidates, not calculation-ready
+models. No supports, load cases or piping-code-specific allowables are exported.
+Verify coordinates, connectivity, dimensions, material and operating data,
+restraints and analysis settings in CAESAR II before engineering use.
+
 ## PipeCAD Sample
 
 Spooler project:

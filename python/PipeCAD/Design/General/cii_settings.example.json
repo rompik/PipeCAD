@@ -1,0 +1,26 @@
+{
+  "illustrative": true,
+  "node_start": 10,
+  "node_step": 10,
+  "ambient_temperature_c": 20.0,
+  "specs": {
+    "TEST-SPEC": [
+      {
+        "nominal_bore_mm": 50.0,
+        "outside_diameter_mm": 60.3,
+        "wall_thickness_mm": 3.91,
+        "insulation_thickness_mm": 0.0,
+        "corrosion_allowance_mm": 1.0,
+        "temperature_c": 80.0,
+        "pressure_kpa": 1000.0,
+        "cold_modulus_kpa": 200000000.0,
+        "hot_modulus_kpa": 195000000.0,
+        "poisson_ratio": 0.3,
+        "pipe_density_kg_m3": 7850.0,
+        "insulation_density_kg_m3": 0.0,
+        "fluid_density_kg_m3": 1000.0,
+        "material_id": 1
+      }
+    ]
+  }
+}
