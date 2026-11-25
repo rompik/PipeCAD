@@ -300,7 +300,7 @@ can_redo = Project.Current.CanRedo
 
 ### 11. Graphics API
 
-Only `Aid` (temporary axis aids in the 3D view) is documented; see `api/PipeCAD.Graphics/Aid.md`. The members of `DrawListManager`, `DrawList`, and `Colour` are not documented yet, so do not guess their signatures.
+`Aid` adds and removes temporary axis aids in the 3D view; see `api/PipeCAD.Graphics/Aid.md`.
 
 
 ## Reference documentation

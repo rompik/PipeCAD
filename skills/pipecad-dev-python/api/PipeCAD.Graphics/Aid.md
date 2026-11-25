@@ -63,7 +63,3 @@ Refreshes the 3D view after aids have been added or removed.
 ```py
 Aid.Update()
 ```
-
-## Source
-
-Signatures and usage are taken from `python/PipeCAD/Design/Equipment/Connect.py`. Other members, parameter types, and return types are not confirmed.
