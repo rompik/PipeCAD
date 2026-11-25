@@ -26,15 +26,15 @@ from PipeCAD.Graphics import *
 
 ### `NextNumber()`
 
-Returns a new tag that identifies an aid. Pass the tag to `AddAxis` and `Remove` to refer to the same aid.
+Returns the next aid number. Pass the number to `AddAxis` and `Remove` to refer to the same aid.
 
 ```py
-aid_tag = Aid.NextNumber()
+aid_number = Aid.NextNumber()
 ```
 
-### `AddAxis(position, direction, tag)`
+### `AddAxis(position, direction, number)`
 
-Adds an axis aid at `position` pointing along `direction`, identified by `tag`. Call `Update` to refresh the view.
+Adds an axis aid at `position` pointing along `direction`, identified by `number`. Call `Update` to refresh the view.
 
 ```py
 # element is a DbElement that has a Pposition/Pdirection point.
@@ -42,17 +42,17 @@ point_index = 1
 position = element.GetPosition('Pposition', point_index, Project.World)
 direction = element.GetDirection('Pdirection', point_index, Project.World)
 
-aid_tag = Aid.NextNumber()
-Aid.AddAxis(position, direction, aid_tag)
+aid_number = Aid.NextNumber()
+Aid.AddAxis(position, direction, aid_number)
 Aid.Update()
 ```
 
-### `Remove(tag)`
+### `Remove(number)`
 
-Removes the aid identified by `tag`. Call `Update` to refresh the view.
+Removes the aid identified by `number`. Call `Update` to refresh the view.
 
 ```py
-Aid.Remove(aid_tag)
+Aid.Remove(aid_number)
 Aid.Update()
 ```
 
