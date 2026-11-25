@@ -300,6 +300,8 @@ can_redo = Project.Current.CanRedo
 
 ### 11. Graphics API
 
+`Aid` adds and removes temporary axis aids in the 3D view; see `api/PipeCAD.Graphics/Aid.md`.
+
 
 ## Reference documentation
 
