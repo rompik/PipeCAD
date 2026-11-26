@@ -45,22 +45,22 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../python/PipeCAD/AI/Assistant.py" line="2543"/>
+        <location filename="../python/PipeCAD/AI/Assistant.py" line="2544"/>
         <source>Model %s | Config %s</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../python/PipeCAD/AI/Assistant.py" line="2557"/>
+        <location filename="../python/PipeCAD/AI/Assistant.py" line="2558"/>
         <source>Schema: %d types | %s</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../python/PipeCAD/AI/Assistant.py" line="2567"/>
+        <location filename="../python/PipeCAD/AI/Assistant.py" line="2568"/>
         <source>Dev skill %s | %d sections / %d API docs</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../python/PipeCAD/AI/Assistant.py" line="2571"/>
+        <location filename="../python/PipeCAD/AI/Assistant.py" line="2574"/>
         <source>Dev skill not loaded (optional): put pipecad-dev-python under &amp;lt;PipeCAD install dir&amp;gt;/skills/, or set PIPECAD_SKILLS to the skills directory.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -105,7 +105,7 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../python/PipeCAD/AI/Assistant.py" line="2666"/>
+        <location filename="../python/PipeCAD/AI/Assistant.py" line="2667"/>
         <source>The script contains deletion or unusual operations. Execute anyway?</source>
         <translation type="unfinished"></translation>
     </message>
@@ -120,7 +120,7 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../python/PipeCAD/AI/Assistant.py" line="2702"/>
+        <location filename="../python/PipeCAD/AI/Assistant.py" line="2703"/>
         <source>Settings saved. Model: %s</source>
         <translation type="unfinished"></translation>
     </message>
@@ -338,8 +338,8 @@
         <location filename="../python/PipeCAD/Design/Piping/Pipeline.py" line="941"/>
         <location filename="../python/PipeCAD/Design/Piping/Pipeline.py" line="1006"/>
         <location filename="../python/PipeCAD/Design/Piping/Pipeline.py" line="1012"/>
-        <location filename="../python/PipeCAD/Design/Piping/Pipeline.py" line="1113"/>
-        <location filename="../python/PipeCAD/Design/Piping/Pipeline.py" line="1127"/>
+        <location filename="../python/PipeCAD/Design/Piping/Pipeline.py" line="1117"/>
+        <location filename="../python/PipeCAD/Design/Piping/Pipeline.py" line="1131"/>
         <source>Undefined</source>
         <translation type="unfinished"></translation>
     </message>
@@ -361,6 +361,80 @@
     <message>
         <location filename="../python/PipeCAD/Design/Piping/Pipeline.py" line="1062"/>
         <source>Please set pipe to change detail!</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>CiiExportDialog</name>
+    <message>
+        <location filename="../python/PipeCAD/Design/General/CiiExportDialog.py" line="19"/>
+        <source>CAESAR II CII Export</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/General/CiiExportDialog.py" line="28"/>
+        <source>Branch List</source>
+        <translation type="unfinished">管道分支列表</translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/General/CiiExportDialog.py" line="33"/>
+        <source>Add</source>
+        <translation type="unfinished">添加</translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/General/CiiExportDialog.py" line="34"/>
+        <source>Remove</source>
+        <translation type="unfinished">去除</translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/General/CiiExportDialog.py" line="35"/>
+        <source>Clear</source>
+        <translation type="unfinished">清空</translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/General/CiiExportDialog.py" line="45"/>
+        <source>Output CII file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/General/CiiExportDialog.py" line="48"/>
+        <source>Settings JSON file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/General/CiiExportDialog.py" line="51"/>
+        <source>Attribute mapping JSON file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/General/CiiExportDialog.py" line="54"/>
+        <source>CII writer layout version</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/General/CiiExportDialog.py" line="59"/>
+        <source>Allow illustrative test settings</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/General/CiiExportDialog.py" line="61"/>
+        <source>Candidate only: review the model in CAESAR II before use.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/General/CiiExportDialog.py" line="82"/>
+        <source>Please select PIPE or BRANCH to export!</source>
+        <translation type="unfinished">请选择管道PIPE或管道分支BRANCH！</translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/General/CiiExportDialog.py" line="105"/>
+        <location filename="../python/PipeCAD/Design/General/CiiExportDialog.py" line="108"/>
+        <source>CII Export</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/General/CiiExportDialog.py" line="109"/>
+        <source>CII candidate created. Check geometry, properties and restraints in CAESAR II before use.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -774,6 +848,25 @@
     </message>
 </context>
 <context>
+    <name>MainWindow</name>
+    <message>
+        <location filename="../python/PipeCAD/Design/General/PmlExporter.py" line="416"/>
+        <source>Please select item to export!</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/General/PmlExporter.py" line="426"/>
+        <location filename="../python/PipeCAD/Design/General/PmlExporter.py" line="430"/>
+        <source>PML Export</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/General/PmlExporter.py" line="433"/>
+        <source>Export PDMS PML finished.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>NozzleDialog</name>
     <message>
         <location filename="../python/PipeCAD/Design/Equipment/Nozzle.py" line="39"/>
@@ -870,43 +963,54 @@
 <context>
     <name>PcfExportDialog</name>
     <message>
-        <location filename="../python/PipeCAD/Design/General/PcfExporter.py" line="146"/>
+        <location filename="../python/PipeCAD/Design/General/PcfExporter.py" line="46"/>
+        <location filename="../python/PipeCAD/Design/General/PcfExporter.py" line="184"/>
         <source>PCF Export</source>
         <translation>导出 PCF</translation>
     </message>
     <message>
-        <location filename="../python/PipeCAD/Design/General/PcfExporter.py" line="152"/>
+        <location filename="../python/PipeCAD/Design/General/PcfExporter.py" line="52"/>
         <source>Branch List</source>
         <translation>管道分支列表</translation>
     </message>
     <message>
-        <location filename="../python/PipeCAD/Design/General/PcfExporter.py" line="164"/>
+        <location filename="../python/PipeCAD/Design/General/PcfExporter.py" line="64"/>
         <source>Add</source>
         <comment>Add Pipe/Branch</comment>
         <translation>添加</translation>
     </message>
     <message>
-        <location filename="../python/PipeCAD/Design/General/PcfExporter.py" line="165"/>
+        <location filename="../python/PipeCAD/Design/General/PcfExporter.py" line="65"/>
         <source>Remove</source>
         <translation>去除</translation>
     </message>
     <message>
-        <location filename="../python/PipeCAD/Design/General/PcfExporter.py" line="166"/>
+        <location filename="../python/PipeCAD/Design/General/PcfExporter.py" line="66"/>
         <source>Clear</source>
         <translation>清空</translation>
     </message>
     <message>
-        <location filename="../python/PipeCAD/Design/General/PcfExporter.py" line="184"/>
+        <location filename="../python/PipeCAD/Design/General/PcfExporter.py" line="84"/>
         <source>Output</source>
         <translation>输出</translation>
     </message>
     <message>
-        <location filename="../python/PipeCAD/Design/General/PcfExporter.py" line="226"/>
+        <location filename="../python/PipeCAD/Design/General/PcfExporter.py" line="137"/>
         <source>Please select PIPE or BRANCH to export!</source>
         <translation>请选择管道PIPE或管道分支BRANCH！</translation>
     </message>
     <message>
-        <location filename="../python/PipeCAD/Design/General/PcfExporter.py" line="240"/>
+        <location filename="../python/PipeCAD/Design/General/PcfExporter.py" line="152"/>
+        <source>Export PCF</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/General/PcfExporter.py" line="154"/>
+        <source>PCF Files (*.pcf)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/General/PcfExporter.py" line="163"/>
         <source>Please add branch to export PCF!</source>
         <translation>请添加管道分支BRANCH导出为PCF！</translation>
     </message>
@@ -974,6 +1078,99 @@
         <location filename="../python/PipeCAD/Design/Piping/Pipeline.py" line="198"/>
         <location filename="../python/PipeCAD/Design/Piping/Pipeline.py" line="273"/>
         <source>Please select PIPE to modify!</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>PipeExtractsDialog</name>
+    <message>
+        <location filename="../python/PipeCAD/Design/Piping/PipeExtracts.py" line="53"/>
+        <source>Pipe Extracts</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/Piping/PipeExtracts.py" line="71"/>
+        <source>Extract Now</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/Piping/PipeExtracts.py" line="77"/>
+        <source>Ready</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/Piping/PipeExtracts.py" line="86"/>
+        <source>Pipes List</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/Piping/PipeExtracts.py" line="92"/>
+        <source>Line Name</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/Piping/PipeExtracts.py" line="93"/>
+        <source>Pipe Name</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/Piping/PipeExtracts.py" line="94"/>
+        <source>Revision</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/Piping/PipeExtracts.py" line="95"/>
+        <source>Status</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/Piping/PipeExtracts.py" line="107"/>
+        <source>Add Pipe</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/Piping/PipeExtracts.py" line="108"/>
+        <source>Remove</source>
+        <translation type="unfinished">去除</translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/Piping/PipeExtracts.py" line="109"/>
+        <source>Clear</source>
+        <translation type="unfinished">清空</translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/Piping/PipeExtracts.py" line="110"/>
+        <source>Select All</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/Piping/PipeExtracts.py" line="139"/>
+        <source>Type of Files for Extraction</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/Piping/PipeExtracts.py" line="142"/>
+        <source>.PDF (3D)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/Piping/PipeExtracts.py" line="143"/>
+        <source>.PDF</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/Piping/PipeExtracts.py" line="144"/>
+        <source>.DXF</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/Piping/PipeExtracts.py" line="145"/>
+        <source>.IDF</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/Piping/PipeExtracts.py" line="146"/>
+        <source>.PCF</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -1202,6 +1399,19 @@
     <message>
         <location filename="../python/PipeCAD/Design/General/Zone.py" line="71"/>
         <source>Purpose</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>parent</name>
+    <message>
+        <location filename="../python/PipeCAD/Design/General/PmlExporter.py" line="397"/>
+        <source>Export PDMS PML</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../python/PipeCAD/Design/General/PmlExporter.py" line="399"/>
+        <source>PDMS PML Macro (*.pml)</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
