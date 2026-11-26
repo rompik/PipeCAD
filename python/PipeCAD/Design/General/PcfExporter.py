@@ -16,118 +16,18 @@
 # Author: Shing Liu(whtuhe@qq.com)
 # Date: 11:20 2026-09-27
 
+import os
+
 from PythonQt.QtCore import *
 from PythonQt.QtGui import *
 
-from PipeCAD.Geometry import *
 from PipeCAD.Database import *
 from PipeCAD.GUI import MainWindow
+from PipeCAD.Design.General.PcfExporterCore import export_file
 
 
 def Export(branchList, filename):
-    branchSize = len(branchList)
-    if branchSize == 0:
-        return
-    # if
-
-    pcfFile = open(filename, "w")
-
-    # PCF HEADER
-    pcfFile.write("ISOGEN-FILES ISOGEN.FLS\n")
-    pcfFile.write("UNITS-BORE        MM\n")
-    pcfFile.write("UNITS-CO-ORDS     MM\n")
-    pcfFile.write("UNITS-BOLT-LENGTH MM\n")
-    pcfFile.write("UNITS-BOLT-DIA    MM\n")
-    pcfFile.write("UNITS-WEIGHT      KGS\n")
-
-    # PIPELINE
-    pipeline = branchList[0].Owner
-    pspec = pipeline.Pspec
-    ispec = pipeline.Ispec
-    tspec = pipeline.Tspec
-
-    pcfFile.write("PIPELINE-REFERENCE {}\n".format(pipeline.Name))
-    if pspec.IsValid:
-        pcfFile.write("    PIPING-SPEC  {}\n".format(pspec.Name))
-    # if
-
-    if ispec.IsValid:
-        pcfFile.write("    INSULATION-SPEC  {}\n".format(ispec.Name))
-    # if 
-
-    if tspec.IsValid:
-        pcfFile.write("    TRACING-SPEC  {}\n".format(tspec.Name))
-    # if
-
-    # Item code dict.
-    itemCodeDict = dict()
-
-    # Branch components.
-    for branch in branchList:
-        headPoint = branch.Hposition
-        tailPoint = branch.Tposition
-
-        members = branch.Members
-        for component in members:
-            type = component.Type
-
-            if type == "TUBI":
-                apos = component.Aposition
-                lpos = component.Lposition
-
-                bore = component.Lbore
-
-                spec = ""
-                spref = component.Spref
-                if spref.IsValid:
-                    spec = spref.Name
-                # if
-
-                pcfFile.write("PIPE\n")
-                pcfFile.write("    COMPONENT-IDENTIFIER  {}\n".format(0))
-                pcfFile.write("    END-POINT  {0} {1} {2} {3}\n".format(apos.X, apos.Y, apos.Z, int(bore)))
-                pcfFile.write("    END-POINT  {0} {1} {2} {3}\n".format(lpos.X, lpos.Y, lpos.Z, int(bore)))
-                pcfFile.write("    PIPING-SPEC  {}\n".format(spec))
-                pcfFile.write("    CATEGORY {}\n".format(""))
-                pcfFile.write("    ITEM-CODE  {}\n".format(spec))
-                pcfFile.write("    ITEM-DESCRIPTION  {}\n".format(""))
-                pcfFile.write("    CUT-PIECE-LENGTH {}\n".format(component.Itlength))
-
-                if len(spec) > 0:
-                    itemCodeDict[spec] = ""
-                # if
-            else:
-                arrive = component.Arrive
-                leave = component.Leave
-
-                apos = Position()
-                lpos = Position()
-
-                abore = 0
-                lbore = 0
-
-                skey = ""
-
-                pcfFile.write("{}\n".format(type))
-                pcfFile.write("    COMPONENT-IDENTIFIER  {}\n".format(0))
-                pcfFile.write("    END-POINT  {0} {1} {2} {3}\n".format(apos.X, apos.Y, apos.Z, int(abore)))
-                pcfFile.write("    END-POINT  {0} {1} {2} {3}\n".format(lpos.X, lpos.Y, lpos.Z, int(lbore)))
-                pcfFile.write("    SKEY  {}\n".format(skey))
-                pcfFile.write("    CATEGORY {}\n".format(""))
-                pcfFile.write("    ITEM-CODE  {}\n".format(""))
-                pcfFile.write("    ITEM-DESCRIPTION  {}\n".format(""))
-            #
-        # for
-    # for
-
-    # ITEM-CODE
-    pcfFile.write("MATERIALS\n")
-    for (key, value) in itemCodeDict.items():
-        pcfFile.write("ITEM-CODE {}\n".format(key))
-        pcfFile.write("    DESCRIPTION  {}\n".format(value))
-    # for
-
-    pcfFile.close()
+    export_file(branchList, filename, Project.World)
 # Export
 
 
@@ -185,10 +85,10 @@ class PcfExportDialog(QDialog):
 
         self.outputLayout = QHBoxLayout(self.outputGroup)
 
-        #
         appPath = QCoreApplication.applicationDirPath()
-        self.textPath = QLineEdit(appPath + "/pipe.pcf")
+        self.textPath = QLineEdit(os.path.join(appPath, "pipe.pcf"))
         self.buttonPath = QPushButton("...")
+        self.buttonPath.clicked.connect(self.selectOutputFile)
 
         self.outputLayout.addWidget(self.textPath)
         self.outputLayout.addWidget(self.buttonPath)
@@ -211,29 +111,52 @@ class PcfExportDialog(QDialog):
         # if
     # addBranch
 
-    def addElement(self):
-        ce = Project.CurrentElement
+    def setOutputPipeName(self, pipe):
+        name = str(pipe.Name).replace("/", "").replace("\\", "") if pipe is not None else ""
+        filename = (name + ".pcf") if name else "pipe.pcf"
+        appPath = QCoreApplication.applicationDirPath()
+        self.textPath.text = os.path.join(appPath, filename)
+
+    def addElement(self, *args):
+        ce = DbElement.Current
+
+        if not ce.IsValid:
+            return
 
         type = ce.Type
         if type == 'PIPE':
+            self.setOutputPipeName(ce)
             memberList = ce.Members
             for member in memberList:
                 self.addBranch(member.Name)
             # for
         elif type == 'BRAN':
+            self.setOutputPipeName(ce.Owner)
             self.addBranch(ce.Name)
         else:
             QMessageBox.warning(self, "", self.tr("Please select PIPE or BRANCH to export!"))
     # addElement
 
-    def removeElement(self):
+    def removeElement(self, *args):
         row = self.listWidget.currentRow
         self.listWidget.takeItem(row)
     # removeList
 
-    def clearList(self):
+    def clearList(self, *args):
         self.listWidget.clear()
     # clearList
+
+    def selectOutputFile(self, *args):
+        filename = QFileDialog.getSaveFileName(
+            self,
+            self.tr("Export PCF"),
+            self.textPath.text,
+            self.tr("PCF Files (*.pcf)"),
+        )
+        if isinstance(filename, (tuple, list)):
+            filename = filename[0]
+        if filename:
+            self.textPath.text = filename
 
     def accept(self):
         if self.listWidget.count < 1:
@@ -247,7 +170,7 @@ class PcfExportDialog(QDialog):
             listItem = self.listWidget.item(row)
             if listItem:
                 branch = Project.GetElement(listItem.text())
-                if branch.IsValid:
+                if branch.IsValid and branch.Type == "BRAN":
                     branchList.append(branch)
                 # if
             # if
@@ -255,7 +178,11 @@ class PcfExportDialog(QDialog):
 
         filename = self.textPath.text
 
-        Export(branchList, filename)
+        try:
+            Export(branchList, filename)
+        except (AttributeError, OSError, RuntimeError, TypeError, ValueError) as ex:
+            QMessageBox.critical(self, self.tr("PCF Export"), str(ex))
+            return
 
         QDialog.accept(self)
     # accept

@@ -1,0 +1,57 @@
+name: Update translations
+
+on:
+  push:
+    branches-ignore:
+      - 'translation-updates/**'
+    paths:
+      - 'python/PipeCAD/**/*.py'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: translations-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  update-translations:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Qt translation tools
+        run: python -m pip install PySide6==6.8.3
+
+      - name: Update and compile translations
+        run: |
+          pyside6-lupdate -extensions py python/PipeCAD -ts translations/*.ts
+          for ts in translations/*.ts; do
+            pyside6-lrelease "$ts" -qm "i18n/$(basename "${ts%.ts}").qm"
+          done
+
+      - name: Determine translation branch
+        id: branch
+        env:
+          SOURCE_BRANCH: ${{ github.ref_name }}
+        run: echo "name=translation-updates/$(printf '%s' "$SOURCE_BRANCH" | sha256sum | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          base: ${{ github.ref_name }}
+          branch: ${{ steps.branch.outputs.name }}
+          delete-branch: true
+          add-paths: |
+            translations/*.ts
+            i18n/*.qm
+          commit-message: 'Update translations'
+          title: 'Update translations'
+          body: |
+            Updates Qt translation catalogs and compiled files after Python source changes.
+            New or changed strings may require manual translation.

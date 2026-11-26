@@ -4,13 +4,13 @@ import os
 
 from PythonQt.QtCore import QCoreApplication, Qt
 from PythonQt.QtGui import (
-    QCheckBox, QDialog, QDialogButtonBox, QGroupBox, QHBoxLayout, QLabel,
+    QCheckBox, QComboBox, QDialog, QDialogButtonBox, QGroupBox, QHBoxLayout, QLabel,
     QLineEdit, QListWidget, QListWidgetItem, QMessageBox, QPushButton, QVBoxLayout,
 )
 
 from PipeCAD.Database import Project
 from PipeCAD.GUI import MainWindow
-from PipeCAD.Design.General.CiiExporter import CiiExporter
+from PipeCAD.Design.General.CiiExporter import CiiExporter, DEFAULT_MAPPING_FILE
 
 
 class CiiExportDialog(QDialog):
@@ -48,6 +48,14 @@ class CiiExportDialog(QDialog):
         root.addWidget(QLabel(self.tr("Settings JSON file"), self))
         self.textSettings = QLineEdit(os.path.join(os.path.dirname(__file__), "cii_settings.example.json"))
         root.addWidget(self.textSettings)
+        root.addWidget(QLabel(self.tr("Attribute mapping JSON file"), self))
+        self.textMapping = QLineEdit(str(DEFAULT_MAPPING_FILE))
+        root.addWidget(self.textMapping)
+        root.addWidget(QLabel(self.tr("CII writer layout version"), self))
+        self.comboVersion = QComboBox(self)
+        self.comboVersion.addItem("10")
+        self.comboVersion.addItem("11")
+        root.addWidget(self.comboVersion)
         self.testSettings = QCheckBox(self.tr("Allow illustrative test settings"), self)
         root.addWidget(self.testSettings)
         root.addWidget(QLabel(self.tr("Candidate only: review the model in CAESAR II before use."), self))
@@ -88,7 +96,10 @@ class CiiExportDialog(QDialog):
                 if not branch.IsValid or branch.Type != "BRAN":
                     raise ValueError("Branch {!r} is no longer available".format(item.text()))
                 branches.append(branch)
-            exporter = CiiExporter.from_file(str(self.textSettings.text), bool(self.testSettings.checked))
+            exporter = CiiExporter.from_file(
+                str(self.textSettings.text), bool(self.testSettings.checked),
+                int(self.comboVersion.currentText), str(self.textMapping.text),
+            )
             exporter.export(branches, str(self.textPath.text))
         except (ValueError, TypeError, AttributeError, OSError) as exc:
             QMessageBox.critical(self, self.tr("CII Export"), str(exc))

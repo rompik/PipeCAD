@@ -1,3 +1,4 @@
+import copy
 import importlib.util
 import json
 import tempfile
@@ -80,6 +81,64 @@ class CiiExporterTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "test-mode"):
             module.CiiExporter(self.settings)
 
+    def test_version_11_writes_reference_element_layout(self):
+        exporter = module.CiiExporter(self.settings, allow_test_settings=True, cii_version=11)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "pipe.cii"
+            exporter.export([branch(tubing((0, 0, 0), (100, 0, 0)))], path)
+            lines = path.read_text(encoding="cp1252").splitlines()
+        self.assertEqual(float(lines[1][15:28]), 11)
+        first = lines.index("#$ ELEMENTS") + 1
+        self.assertEqual(lines.index("#$ AUX_DATA") - first, 15)
+        self.assertEqual(lines[first + 9].strip(), "0")
+        self.assertEqual(lines[first + 10].strip(), "0")
+        self.assertEqual([int(value) for value in fields(lines[first + 11])], [-1, -1])
+        self.assertEqual(sum(len(fields(line)) for line in lines[first + 12:first + 15]), 15)
+
+    def test_mapping_selects_settings_source_and_checks_version(self):
+        mapping = json.loads(module.DEFAULT_MAPPING_FILE.read_text(encoding="utf-8"))
+        pressure = next(item for item in mapping["mappings"] if item["target"] == "ELEMENTS.REL[19] pressure 1")
+        pressure["source"] = ["settings.design_pressure_kpa"]
+        self.settings["specs"]["TEST-SPEC"][0]["design_pressure_kpa"] = 2400
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            mapping_file = directory / "mapping.json"
+            mapping_file.write_text(json.dumps(mapping), encoding="utf-8")
+            exporter = module.CiiExporter(self.settings, True, 10, mapping_file)
+            path = directory / "pipe.cii"
+            exporter.export([branch(tubing((0, 0, 0), (100, 0, 0)))], path)
+            lines = path.read_text(encoding="cp1252").splitlines()
+            first = lines.index("#$ ELEMENTS") + 1
+            values = [float(field) for line in lines[first:first + 9] for field in fields(line)]
+            self.assertEqual(values[18], 2400)
+            pressure["version"] = 11
+            mapping_file.write_text(json.dumps(mapping), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "requires writer layout 11"):
+                module.CiiExporter(self.settings, True, 10, mapping_file)
+            module.CiiExporter(self.settings, True, 11, mapping_file)
+
+    def test_invalid_mapping_and_version_are_rejected(self):
+        mapping = json.loads(module.DEFAULT_MAPPING_FILE.read_text(encoding="utf-8"))
+        cases = []
+        missing_version = copy.deepcopy(mapping)
+        missing_version["mappings"][0]["version"] = None
+        cases.append(missing_version)
+        wrong_geometry = copy.deepcopy(mapping)
+        wrong_geometry["mappings"][0]["source"] = ["Lposition"]
+        cases.append(wrong_geometry)
+        wrong_unit = copy.deepcopy(mapping)
+        next(item for item in wrong_unit["mappings"]
+             if item["target"] == "ELEMENTS.REL[19] pressure 1")["source"] = ["settings.temperature_c"]
+        cases.append(wrong_unit)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "mapping.json"
+            for case in cases:
+                path.write_text(json.dumps(case), encoding="utf-8")
+                with self.assertRaises(ValueError):
+                    module.CiiExporter(self.settings, True, 10, path)
+        with self.assertRaisesRegex(ValueError, "must be 10 or 11"):
+            module.CiiExporter(self.settings, True, 13)
+
     def test_unknown_components_and_mapping_do_not_replace_output(self):
         cases = [
             branch(tubing((0, 0, 0), (1, 0, 0)), SimpleNamespace(Type="ELBO")),
@@ -93,10 +152,27 @@ class CiiExporterTests(unittest.TestCase):
                     self.exporter.export([case], path)
                 self.assertEqual(path.read_bytes(), b"existing")
 
-    def test_disconnected_duplicate_and_zero_length_rejected(self):
+    def test_disconnected_components_have_separate_coordinate_anchors(self):
+        components = [
+            tubing((100, 200, 300), (200, 200, 300)),
+            tubing((1000, 2000, 3000), (1100, 2000, 3000)),
+            tubing((200, 200, 300), (300, 200, 300)),
+            tubing((1200, 2000, 3000), (1100, 2000, 3000)),
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "pipe.cii"
+            self.exporter.export([branch(*components)], path)
+            lines = path.read_text(encoding="cp1252").splitlines()
+        coords = lines.index("#$ COORDS")
+        self.assertEqual(int(fields(lines[coords + 1])[0]), 2)
+        self.assertEqual([float(field) for field in fields(lines[coords + 2])],
+                         [10, 100, 200, 300])
+        self.assertEqual([float(field) for field in fields(lines[coords + 3])],
+                         [30, 1000, 2000, 3000])
+
+    def test_duplicate_and_zero_length_rejected(self):
         first = tubing((0, 0, 0), (100, 0, 0))
         cases = [
-            branch(first, tubing((200, 0, 0), (300, 0, 0))),
             branch(first, tubing((100, 0, 0), (0, 0, 0))),
             branch(tubing((0, 0, 0), (0, 0, 0))),
         ]

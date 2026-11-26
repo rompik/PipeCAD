@@ -1,4 +1,4 @@
----
+---
 title: PipeCAD.Graphics Namespace
 namespace: PipeCAD.Graphics
 source: PipeCAD.Graphics

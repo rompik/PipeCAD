@@ -25,6 +25,32 @@ _UNIT_LABELS = (
     "mm.",
 )
 
+DEFAULT_MAPPING_FILE = Path(__file__).resolve().parents[4] / "data" / "cii_attribute_mapping.json"
+_POSITION_MAPPINGS = {
+    "ELEMENTS.REL[1] FROM node": ["Aposition"],
+    "ELEMENTS.REL[2] TO node": ["Lposition"],
+    "ELEMENTS.REL[3] delta X": ["Aposition.X", "Lposition.X"],
+    "ELEMENTS.REL[4] delta Y": ["Aposition.Y", "Lposition.Y"],
+    "ELEMENTS.REL[5] delta Z": ["Aposition.Z", "Lposition.Z"],
+    "COORDS node and global X, Y, Z": ["Aposition"],
+}
+_PROPERTY_MAPPINGS = {
+    "outside_diameter_mm": "ELEMENTS.REL[6] actual outside diameter",
+    "wall_thickness_mm": "ELEMENTS.REL[7] wall thickness",
+    "insulation_thickness_mm": "ELEMENTS.REL[8] insulation thickness",
+    "corrosion_allowance_mm": "ELEMENTS.REL[9] corrosion allowance",
+    "temperature_c": "ELEMENTS.REL[10] temperature 1",
+    "pressure_kpa": "ELEMENTS.REL[19] pressure 1",
+    "cold_modulus_kpa": "ELEMENTS.REL[28] cold elastic modulus",
+    "poisson_ratio": "ELEMENTS.REL[29] Poisson ratio",
+    "pipe_density_kg_m3": "ELEMENTS.REL[30] pipe density",
+    "insulation_density_kg_m3": "ELEMENTS.REL[31] insulation density",
+    "fluid_density_kg_m3": "ELEMENTS.REL[32] fluid density",
+    "hot_modulus_kpa": "ELEMENTS.REL[37] hot elastic modulus 1",
+    "material_id": "MISCEL_1.RRMAT material ID",
+    "ambient_temperature_c": "MISCEL_1 execution options: ambient temperature",
+}
+
 
 def _number(value, name):
     if isinstance(value, bool) or not isinstance(value, (int, float)):
@@ -70,27 +96,83 @@ def _position(value):
 class CiiExporter:
     """Write an unqualified CII candidate; engineering inputs must be reviewed."""
 
-    def __init__(self, settings, allow_test_settings=False):
+    def __init__(self, settings, allow_test_settings=False, cii_version=10, mapping_file=None):
         if not isinstance(settings, dict):
             raise ValueError("CII settings must be a JSON object")
+        if isinstance(cii_version, bool) or not isinstance(cii_version, int) or cii_version not in (10, 11):
+            raise ValueError("CII writer layout must be 10 or 11")
+        self.cii_version = cii_version
         illustrative = settings.get("illustrative")
         if not isinstance(illustrative, bool):
             raise ValueError("illustrative must be true or false")
         if illustrative and not allow_test_settings:
             raise ValueError("Illustrative settings require explicit test-mode consent")
+        with open(mapping_file if mapping_file is not None else DEFAULT_MAPPING_FILE, encoding="utf-8") as source:
+            mapping = json.load(source)
+        self.mapping = self._load_mapping(mapping)
         self.settings = settings
         self.start = _integer(settings.get("node_start"), "node_start", 1, 999999)
         self.step = _integer(settings.get("node_step"), "node_step", 1, 999999)
-        self.ambient = _number(settings.get("ambient_temperature_c"), "ambient_temperature_c")
+        self.ambient = _number(settings.get(self.mapping["ambient_temperature_c"]), "ambient_temperature_c")
         specs = settings.get("specs")
         if not isinstance(specs, dict) or not specs:
             raise ValueError("specs must be a non-empty object")
         self.specs = specs
 
     @classmethod
-    def from_file(cls, filename, allow_test_settings=False):
+    def from_file(cls, filename, allow_test_settings=False, cii_version=10, mapping_file=None):
         with open(filename, encoding="utf-8") as source:
-            return cls(json.load(source), allow_test_settings)
+            return cls(json.load(source), allow_test_settings, cii_version, mapping_file)
+
+    def _load_mapping(self, mapping):
+        if not isinstance(mapping, dict) or not isinstance(mapping.get("mappings"), list):
+            raise ValueError("CII mapping must contain a mappings list")
+        lookup = mapping.get("lookup")
+        if (not isinstance(lookup, dict) or lookup.get("component_type") != "TUBI"
+                or lookup.get("source") != ["Spref.Name", "Lbore"]
+                or lookup.get("settings") != ["specs[Spref.Name]", "nominal_bore_mm"]):
+            raise ValueError("Unsupported CII specification lookup mapping")
+        by_target = {}
+        supported = set(_POSITION_MAPPINGS) | set(_PROPERTY_MAPPINGS.values())
+        for item in mapping["mappings"]:
+            if not isinstance(item, dict):
+                raise ValueError("Each CII mapping must be an object")
+            target = item.get("target")
+            if not isinstance(target, str):
+                raise ValueError("Each CII mapping requires a target")
+            if target in by_target:
+                raise ValueError("Duplicate CII mapping target {!r}".format(target))
+            by_target[target] = item
+            if item.get("status") == "implemented_unverified" and target not in supported:
+                raise ValueError("CII mapping target {!r} is not implemented".format(target))
+        for target in supported:
+            item = by_target.get(target)
+            if item is None or item.get("status") != "implemented_unverified":
+                raise ValueError("Required CII mapping {!r} is not implemented".format(target))
+            version = item.get("version")
+            if isinstance(version, bool) or not isinstance(version, int) or version < 1:
+                raise ValueError("Required CII mapping {!r} has no known version".format(target))
+            if version > self.cii_version:
+                raise ValueError("CII mapping {!r} requires writer layout {}".format(target, version))
+            if item.get("component_types") != ["TUBI"]:
+                raise ValueError("CII mapping {!r} must apply to TUBI".format(target))
+        for target, sources in _POSITION_MAPPINGS.items():
+            if by_target[target].get("source") != sources:
+                raise ValueError("Unsupported geometry source for CII mapping {!r}".format(target))
+        properties = {}
+        for name, target in _PROPERTY_MAPPINGS.items():
+            source = by_target[target].get("source")
+            if not isinstance(source, list) or len(source) != 1 or not isinstance(source[0], str):
+                raise ValueError("CII mapping {!r} requires one settings source".format(target))
+            prefix = "settings."
+            key = source[0][len(prefix):]
+            suffix = next((unit for unit in ("_kg_m3", "_mm", "_kpa", "_c", "_ratio", "_id")
+                           if name.endswith(unit)), None)
+            if (not source[0].startswith(prefix) or not key.isidentifier()
+                    or suffix is None or not key.endswith(suffix)):
+                raise ValueError("Invalid or incompatible settings source for CII mapping {!r}".format(target))
+            properties[name] = key
+        return properties
 
     def _properties(self, component):
         spec = component.Spref
@@ -118,8 +200,8 @@ class CiiExporter:
             "cold_modulus_kpa", "poisson_ratio", "pipe_density_kg_m3",
             "insulation_density_kg_m3", "fluid_density_kg_m3", "hot_modulus_kpa",
         )
-        values = {field: _number(item.get(field), field) for field in fields}
-        values["material_id"] = _integer(item.get("material_id"), "material_id", 1, 699)
+        values = {field: _number(item.get(self.mapping[field]), field) for field in fields}
+        values["material_id"] = _integer(item.get(self.mapping["material_id"]), "material_id", 1, 699)
         if values["outside_diameter_mm"] <= 0 or values["wall_thickness_mm"] <= 0:
             raise ValueError("Outside diameter and wall thickness must be positive")
         if 2 * values["wall_thickness_mm"] >= values["outside_diameter_mm"]:
@@ -146,6 +228,7 @@ class CiiExporter:
 
         nodes = {}
         edges = set()
+        adjacency = {}
         elements = []
         for branch in branches:
             for component in branch.Members:
@@ -164,6 +247,9 @@ class CiiExporter:
                     if position not in nodes:
                         node = self.start + len(nodes) * self.step
                         nodes[position] = _integer(node, "node number", 1, 999999)
+                        adjacency[position] = set()
+                adjacency[start].add(end)
+                adjacency[end].add(start)
                 delta = tuple(b - a for a, b in zip(start, end))
                 for value in delta:
                     if abs(float(_real_field(value)) - value) > 0.01:
@@ -172,18 +258,21 @@ class CiiExporter:
         if not elements:
             raise ValueError("Selected branches contain no tubing")
 
-        # A single coordinate anchor is sufficient only for a connected graph.
-        connected = {elements[0][0]}
-        while True:
-            expanded = connected | {end for start, end, _, _ in elements if start in connected}
-            expanded |= {start for start, end, _, _ in elements if end in connected}
-            if expanded == connected:
-                break
-            connected = expanded
-        if len(connected) != len(nodes):
-            raise ValueError("Selected tubing is disconnected; export connected branches separately")
+        origins = []
+        visited = set()
+        for start, _, _, _ in elements:
+            if start in visited:
+                continue
+            origins.append(start)
+            pending = [start]
+            visited.add(start)
+            while pending:
+                position = pending.pop()
+                for neighbor in adjacency[position] - visited:
+                    visited.add(neighbor)
+                    pending.append(neighbor)
 
-        lines = ["#$ VERSION", "  {:13.6f}{:13.6f}{:8d}".format(5.0, 10.0, 1252)]
+        lines = ["#$ VERSION", "  {:13.6f}{:13.6f}{:8d}".format(5.0, self.cii_version, 1252)]
         lines.extend(["  PipeCAD CII export candidate"] + ["  "] * 59)
         lines.append("#$ CONTROL")
         lines.extend(_integer_lines([len(elements), 0, 0, 0, 0, 0] + [0] * 11 + [1, 0]))
@@ -202,6 +291,9 @@ class CiiExporter:
             values[36] = p["hot_modulus_kpa"]
             lines.extend(_real_lines(values))
             lines.append("       {:5d} ".format(0))
+            if self.cii_version == 11:
+                lines.append("       {:5d} ".format(0))
+                lines.extend(_integer_lines([-1, -1]))
             lines.extend(_integer_lines([0] * 15))
 
         lines.append("#$ AUX_DATA")
@@ -219,12 +311,12 @@ class CiiExporter:
         lines.extend(_real_lines(_UNIT_FACTORS))
         lines.extend("  " + label for label in _UNIT_LABELS)
         lines.append("#$ COORDS")
-        lines.extend(_integer_lines([1]))
-        origin = elements[0][0]
-        coords = ["{:13.4f}".format(value) for value in origin]
-        if any(len(value) > 13 for value in coords):
-            raise ValueError("Origin coordinate does not fit a CII field")
-        lines.append("  " + str(nodes[origin]).rjust(13) + "".join(coords))
+        lines.extend(_integer_lines([len(origins)]))
+        for origin in origins:
+            coords = ["{:13.4f}".format(value) for value in origin]
+            if any(len(value) > 13 for value in coords):
+                raise ValueError("Origin coordinate does not fit a CII field")
+            lines.append("  " + str(nodes[origin]).rjust(13) + "".join(coords))
 
         output = "\r\n".join(lines) + "\r\n"
         Path(filename).write_bytes(output.encode("cp1252"))

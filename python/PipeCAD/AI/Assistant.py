@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-PipeCAD AI Assistant —— Natural language-driven modeling (single file version)
+PipeCAD AI Assistant - natural-language-driven modeling (single-file version)
 
-Pipeline in a nutshell: user speaks plain language → model outputs constrained Python script → static validation → transaction execution → read-back confirmation.
+Pipeline: user speaks plain language -> model outputs constrained Python script
+-> static validation -> transaction execution -> read-back confirmation.
 
 Usage (PipeCAD Command Window):
 
@@ -14,7 +15,7 @@ Usage (PipeCAD Command Window):
 
     # Use core layer only, no window
     core = Assistant.create_core()
-    turn = core.plan('建一根 DN200 的管线 P-101')
+    turn = core.plan('Create a DN200 pipeline P-101')
     if turn.ok:
         print(core.execute(turn.script).summary())
 
@@ -22,7 +23,7 @@ Usage (PipeCAD Command Window):
     Assistant.start_bridge(port=8765, token='change-me')
 
 Designed in five layers, connected only by function calls for easy unit testing and replacement:
-    Schema Retrieval → Prompt → LLM Client → Static Validation → Transaction Execution
+    Schema Retrieval -> Prompt -> LLM Client -> Static Validation -> Transaction Execution
 Window layer and local bridge are just two shells for these five layers.
 
 Single file by design: multi-file packages lose one .py during deployment,
@@ -41,9 +42,18 @@ import ssl
 import sys
 import threading
 import traceback
+import unicodedata
 import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+from PipeCAD.AI.Localization import Localization
+
+
+def _diag(key, **kwargs):
+    """Returns a diagnostic in the active request language."""
+    return Localization.get_instance()._('diagnostics.' + key, **kwargs)
+
 
 # --------------------------------------------------------------------------
 # Qt (window layer only; core layer still works without PythonQt)
@@ -66,8 +76,8 @@ except ImportError as _qt_err:
 
     class QDialog(object):
         def __init__(self, parent=None):
-            raise RuntimeError('窗口层需要 PythonQt：请在 PipeCAD 内运行，'
-                               '不要用系统 python.exe（%s）' % _qt_import_error)
+            raise RuntimeError(Localization.get_instance()._(
+                'error_requires_pythonqt', error=_qt_import_error))
 
     QVBoxLayout = QHBoxLayout = QLabel = QWidget = object
     QTextBrowser = QPlainTextEdit = QPushButton = QSplitter = QMessageBox = object
@@ -100,17 +110,32 @@ NOISE_ATTRS = {
     'Dmfarray', 'Rlstored', 'Module', 'Fstatus', 'Bstatus', 'Rev', 'DUnion',
 }
 
-# Chinese colloquial -> English keyword synonym table to map equipment names to type names
-CN_HINTS = {
-    '罐': ['EQUI', 'CYLI', 'NOZZ'], '容器': ['EQUI', 'CYLI'], '设备': ['EQUI'],
-    '泵': ['EQUI'], '换热器': ['EQUI'], '塔': ['EQUI', 'CYLI'],
-    '管': ['PIPE', 'BRAN', 'TUBE'], '管道': ['PIPE', 'BRAN'], '管线': ['PIPE', 'BRAN'],
-    '分支': ['BRAN'], '弯头': ['ELBO'], '三通': ['TEE'], '异径': ['REDU'], '大小头': ['REDU'],
-    '法兰': ['FLAN'], '阀门': ['VALV'], '垫片': ['GASK'], '管帽': ['CAP'], '盲板': ['FBLI'],
-    '支架': ['SUPPO', 'ATTA', 'REST'], '结构': ['STRU'], '平台': ['PLTF'], '梯子': ['LADDER'],
-    '区域': ['ZONE'], '工区': ['ZONE'], '场区': ['SITE'], '站点': ['SITE'],
-    '长方体': ['BOX'], '圆柱': ['CYLI'], '圆': ['CIRC'], '点': ['PTCA', 'Position'],
-    '喷嘴': ['NOZZ'], '管口': ['NOZZ'], '文本': ['TEXT'],
+def _validate_request_language(language):
+    if language not in Localization.get_available_languages():
+        raise ValueError(_diag('runtime.invalid_language', language=language))
+    return language
+
+SCHEMA_HINT_TYPES = {
+    'tank': ('EQUI', 'CYLI', 'NOZZ'),
+    'pipe': ('PIPE', 'BRAN', 'TUBE'),
+    'branch': ('BRAN',),
+    'elbow': ('ELBO',),
+    'tee': ('TEE',),
+    'reducer': ('REDU',),
+    'flange': ('FLAN',),
+    'valve': ('VALV',),
+    'gasket': ('GASK',),
+    'cap': ('CAP', 'FBLI'),
+    'nozzle': ('NOZZ',),
+    'support': ('SUPPO', 'ATTA', 'REST'),
+    'structure': ('STRU',),
+    'zone': ('ZONE',),
+    'site': ('SITE',),
+    'box': ('BOX',),
+    'cylinder': ('CYLI',),
+    'circle': ('CIRC',),
+    'point': ('PTCA',),
+    'text': ('TEXT',),
 }
 
 
@@ -133,12 +158,12 @@ SCAN_JUNK = {
 
 
 class MetadataSearch(object):
-    '''记录最近一次探测过的路径，供 selfcheck 打印。'''
+    '''Stores the most recently probed paths for selfcheck output.'''
     last = []
 
 
 def _metadata_roots():
-    '''按"越具体越靠前"的顺序给出探测锚点。'''
+    '''Returns search anchors ordered from most specific to least specific.'''
     roots = []
 
     def add(p):
@@ -169,7 +194,7 @@ def _metadata_roots():
 
 
 def _scan_metadata(roots, budget=8000, max_depth=4):
-    '''有界递归找 MetaData.json：最多看 budget 个目录项，深度不超过 max_depth。'''
+    '''Searches for MetaData.json within budget entries and max_depth levels.'''
     visited = 0
     for root in roots:
         stack = [(root, 0)]
@@ -198,7 +223,7 @@ def _scan_metadata(roots, budget=8000, max_depth=4):
 
 
 class MetaData(object):
-    '''MetaData.json 的轻量索引，进程内单例。'''
+    '''Lightweight, process-wide index of MetaData.json.'''
 
     _instance = None
 
@@ -224,11 +249,12 @@ class MetaData(object):
     # ------------------------------------------------------------------ Locating
     @staticmethod
     def _find_metadata():
-        '''MetaData.json 随 PipeCAD 安装，按"锚点 + 有界扫描"两段探测。
+        '''Finds the MetaData.json shipped with PipeCAD using anchors and a bounded scan.
 
-        锚点顺序：环境变量 -> 本模块目录 -> 当前工作目录 -> PipeCAD 解释器目录，
-        每个锚点再向上回溯 5 层（安装目录常见层次：<root>/build/bin/Release/python/PipeCAD/AI）。
-        锚点全部落空才做有界递归，避免在大盘上卡住。
+        Anchors are checked in this order: environment variables, this module's directory,
+        the current working directory, and the PipeCAD interpreter directory. Each anchor
+        is traversed up to seven parent levels. A bounded recursive scan is used only if
+        none of the anchors succeeds, avoiding an unbounded search across large drives.
         '''
         probes = []
         for root in _metadata_roots():
@@ -255,12 +281,12 @@ class MetaData(object):
             return found
 
         MetadataSearch.last = probes
-        raise IOError('未找到 MetaData.json（试过 %d 个位置），'
-                      '请设置 PIPECAD_HOME 指向含 data/MetaData.json 的目录' % len(probes))
+        raise IOError(Localization.get_instance()._(
+            'error_metadata_not_found', count=len(probes)))
 
     # ------------------------------------------------------------------ Retrieval
     def search_types(self, text, limit=8):
-        '''按自然语言文本粗略检索相关类型，返回 ShortName 列表。'''
+        '''Roughly searches for types related to the natural-language input and returns ShortNames.'''
         keywords = self._extract_keywords(text)
         scored = []
         for sn, t in self.types.items():
@@ -284,9 +310,15 @@ class MetaData(object):
 
     def _extract_keywords(self, text):
         words = []
-        for cn, ens in CN_HINTS.items():
-            if cn in text:
-                words.extend(ens)
+        lower_text = text.lower()
+        for language in Localization.get_available_languages():
+            locale = Localization(language, auto_detect=False)
+            for hint, type_names in SCHEMA_HINT_TYPES.items():
+                terms = locale.get_data('hint_' + hint, '')
+                for term in re.split(r'[,\u3001\uff0c]', terms):
+                    term = term.strip().lower()
+                    if term and term in lower_text:
+                        words.extend(type_names)
         # Direct English type names (case insensitive)
         for tok in _tokenize(text):
             up = tok.upper()
@@ -304,7 +336,7 @@ class MetaData(object):
 
     # ------------------------------------------------------------------ Rendering
     def render_type(self, short_name):
-        '''把单个类型压成 4~6 行紧凑描述，供 prompt 使用。'''
+        '''Formats one type as a compact 4-6 line description for the prompt.'''
         t = self.types.get(short_name)
         if not t:
             return ''
@@ -323,16 +355,16 @@ class MetaData(object):
         return '\n'.join(lines)
 
     def common_attrs(self, short_name, limit=MAX_ATTRS_PER_TYPE, include_noise=False):
-        '''取该类型对建模有用的属性名，优先几何/标识类。
+        '''Returns useful modeling attributes for a type, prioritizing geometry and identifiers.
 
-        include_noise=True 时不过滤"视图/出图类"属性，供 guard 做合法性判定
-        （那些属性合法，只是不往 prompt 里塞）。
+        When include_noise=True, drawing and presentation attributes are retained for guard
+        validation. Those attributes are valid but are normally omitted from the prompt.
         '''
         t = self.types.get(short_name)
         if not t:
             return []
         names = [a.get('Name') for a in (t.get('Attributes') or []) if a.get('Name')]
-        # ':' 开头是内部派生属性，Usr* 是用户重量重心，写不进也不该让模型看到
+        # ':'-prefixed attributes are derived; Usr* attributes are read-only weight/center-of-gravity data.
         names = [n for n in names if not n.startswith(':') and not n.startswith('Usr')]
         usable = names if include_noise else [n for n in names if n not in NOISE_ATTRS]
         picked = [n for n in PRIORITY_ATTRS if n in usable]
@@ -340,7 +372,7 @@ class MetaData(object):
         return (picked + rest)[:limit]
 
     def attr_exist(self, short_name, attr_name):
-        '''guard 用：判断属性名对该类型是否合法（含 Owner 继承的通用属性）。'''
+        '''Checks whether an attribute is valid for a type, including inherited Owner attributes.'''
         if attr_name in self._attr_set:
             return True
         # Case-insensitive tolerance
@@ -349,7 +381,7 @@ class MetaData(object):
         return False
 
     def schema_digest(self, text, limit=8):
-        '''给一段用户输入，产出可直接拼进 prompt 的 schema 片段。'''
+        '''Builds a schema excerpt for the prompt from the user's input.'''
         keys = self.search_types(text, limit=limit)
         if not keys:
             keys = ['SITE', 'ZONE', 'PIPE', 'BRAN', 'EQUI', 'BOX']
@@ -374,14 +406,14 @@ def _tokenize(text):
 
 
 def get_metadata(path=None):
-    '''进程内复用，避免每次对话都重读 4MB 的 json。'''
+    '''Reuses the process-wide metadata index instead of rereading the JSON on every turn.'''
     if MetaData._instance is None:
         MetaData._instance = MetaData(path)
     return MetaData._instance
 
 
 def set_metadata(path):
-    '''手动指定 MetaData.json，跳过自动探测。
+    '''Manually specifies the MetaData.json path, bypassing automatic discovery.
 
     from PipeCAD.AI import Assistant
     Assistant.set_metadata(r'D:\\Projects\\PipeCAD\\data\\MetaData.json')
@@ -389,7 +421,7 @@ def set_metadata(path):
     if os.path.isdir(path):
         path = os.path.join(path, 'data', 'MetaData.json')
     if not os.path.isfile(path):
-        raise IOError('文件不存在：%s' % path)
+        raise IOError(Localization.get_instance()._('error_file_not_found', path=path))
     MetaData._instance = MetaData(path)
     return MetaData._instance.path
 
@@ -410,7 +442,7 @@ SKILL_CACHE = {}
 
 
 class SkillPack(object):
-    """一个已加载技能的内存索引。"""
+    """In-memory index for a loaded skill."""
 
     def __init__(self, root):
         self.root = root
@@ -455,7 +487,7 @@ class SkillPack(object):
 
     # ------------------------------------------------------------------ Retrieval
     def search(self, text, max_sections=2, max_apis=3, budget=3500):
-        """按用户输入召回技能片段，返回可直接拼进 prompt 的文本（可能为空）。"""
+        """Finds relevant skill excerpts for the input, ready to add to a prompt; may be empty."""
         self.load()
         if not self.skill_md and not self.api_docs:
             return ''
@@ -494,14 +526,15 @@ class SkillPack(object):
 
         out = []
         if picked:
-            out.append('# Skill reference（%s）\n%s' % (SKILL_NAME, '\n\n'.join(picked)))
+            out.append('# %s\n%s' % (_diag('runtime.skill_reference', name=SKILL_NAME),
+                                     '\n\n'.join(picked)))
         if api_lines:
             out.append('# Skill API index (check api/<type_name>.md for precise signatures)\n'
                        + '\n'.join(api_lines))
         return '\n\n'.join(out)
 
     def api_doc(self, type_name, max_chars=6000):
-        """取某个类型的 API 文档原文（截断）。"""
+        """Returns a type's API documentation, truncated to max_chars."""
         self.load()
         hit = self.api_docs.get(type_name)
         if hit is None:
@@ -518,12 +551,12 @@ class SkillPack(object):
             return ''
 
     def type_members(self, name, limit=40):
-        """查这个类型的属性名列表（找不到返回 []）。
+        """Returns a type's attribute names, or [] if the type is not found.
 
-        注意技能里这份 MetaData.json 只收录**模型层类型**，键是短名：
-        值类型是 3~5 位大写短名（EQUI、WORL、STRU），管线/结构类型就直接是
-        PIPE、BRAN。它没有 DbElement 这类 Python 包装类，所以 Python 类名查不到
-        属于正常，调用方（selfcheck、调试）要能接受空结果。
+        The skill's MetaData.json contains only model types keyed by ShortName:
+        values are 3-5 character uppercase identifiers (EQUI, WORL, STRU), or
+        PIPE and BRAN for pipe and branch types. It does not contain Python
+        wrapper classes such as DbElement, so looking up a Python class may return no result.
         """
         if not self.metadata_path:
             return []
@@ -552,70 +585,31 @@ class SkillPack(object):
         return []
 
 
-# Chinese word list for skill retrieval: user natural language rarely hits API names directly,
-# need to map phrases like "search element" "read property" "undo" to SKILL.md sections
-SKILL_KEYWORDS = {
-    '查找': ['查找元素', '过滤器', 'BaseFilter', 'TypeFilter', 'Find'],
-    '搜索': ['查找元素', '过滤器', 'BaseFilter', 'TypeFilter'],
-    '过滤': ['过滤器', 'BaseFilter', 'TypeFilter', 'AndFilter'],
-    '创建': ['创建元素', 'Create', '成员', 'Members'],
-    '新建': ['创建元素', 'Create', 'Members'],
-    '删除': ['删除元素', 'Delete'],
-    '属性': ['读写属性', 'SetAttribute', 'GetAsString', 'DbAttribute'],
-    '读取': ['读写属性', 'GetAsString', '属性值'],
-    '写入': ['读写属性', 'SetAttribute'],
-    '设置': ['读写属性', 'SetAttribute'],
-    '几何': ['几何属性', 'Position', 'Orientation', 'Direction', '尺寸'],
-    '位置': ['几何属性', 'Position', '坐标'],
-    '尺寸': ['几何属性', 'Xlength', 'Ylength', 'Zlength', 'Height'],
-    '坐标': ['几何属性', 'Position', '坐标系'],
-    '事务': ['事务机制', 'OpenTransaction', 'CommitTransaction'],
-    '撤销': ['事务机制', 'Undo', 'CanUndo'],
-    '重做': ['事务机制', 'Redo', 'CanRedo'],
-    '保存': ['项目接口', 'Save'],
-    '项目': ['项目接口', 'Project', 'Current', 'World'],
-    '界面': ['GUI开发', 'PythonQt', 'QDialog'],
-    '窗口': ['GUI开发', 'PythonQt', 'QDialog'],
-    '对话框': ['GUI开发', 'PythonQt', 'QDialog'],
-    '按钮': ['GUI开发', 'QPushButton', 'PythonQt'],
-    '事件': ['事件处理', 'OnEvent', 'Callback'],
-    '监听': ['事件处理', 'OnEvent', 'DatabaseChanged'],
-    '集合': ['元素集合', 'DbElementCollection', 'Members'],
-    '遍历': ['元素集合', 'Members', 'DbElementCollection'],
-    '类型': ['核心概念', 'DbElementType', 'ShortName', 'Type'],
-    '命名空间': ['使用流程', 'PipeCAD.Database', 'PipeCAD.Geometry'],
-    '接口': ['参考文档', 'api', 'INDEX'],
-    '绘图': ['图形接口', 'DrawList', 'DrawListManager', 'Colour'],
-    '画': ['图形接口', 'DrawList', 'DrawListManager'],
-}
-
-# Common function/question words not listed in word table are dropped during tokenization to avoid noise matching
-STOP_CHARS = set('的了吗呢吧啊是在有和与及或就都也很不个这那什么怎样如何怎么可以要'
-                 '请帮我给把从到对为以为其之一个下上里中')
-
-
 def skill_keywords(text):
-    """把一句中文/英文混排的需求切成检索词。
-
-    英文直接按标识符切；中文没有空格，用二元组 + 词表映射：
-    "事务怎么写" -> ['事务', 'OpenTransaction', 'CommitTransaction', '事务写', '务怎' ...]
-    二元组负责兜底（同义词表没覆盖的情况），词表负责精确命中章节。
-    """
+    """Tokenizes requests using the per-locale strategies stored in locale resources."""
     words = []
-    for w in _tokenize(text):
-        low = w.lower()
-        if len(low) >= 2 and low.isascii():
-            words.append(low)
-    # Chinese continuous sequences: check word list first, then supplement with bigrams
-    for chunk in re.findall(r'[\u4e00-\u9fa5]+', text):
-        for word, aliases in SKILL_KEYWORDS.items():
-            if word in chunk:
-                words.extend(a.lower() for a in aliases)
-        for i in range(len(chunk) - 1):
-            pair = chunk[i:i + 2]
-            if pair[0] in STOP_CHARS and pair[1] in STOP_CHARS:
-                continue
-            words.append(pair)
+    for language in Localization.get_available_languages():
+        config = Localization(language, auto_detect=False).get_data('skill_search', {})
+        ngram_size = max(1, int(config.get('ngram_size', 1)))
+        stop_words = set(word.lower() for word in config.get('stop_words', []))
+        stop_chars = set(config.get('stop_chars', ''))
+        lower_text = text.lower()
+
+        for term, aliases in config.get('keywords', {}).items():
+            if term.lower() in lower_text:
+                words.extend(alias.lower() for alias in aliases)
+
+        for token in _tokenize(text):
+            if _is_east_asian_text(token):
+                if ngram_size > 1:
+                    for index in range(len(token) - ngram_size + 1):
+                        gram = token[index:index + ngram_size]
+                        if not all(char in stop_chars for char in gram):
+                            words.append(gram.lower())
+            else:
+                word = token.lower()
+                if len(word) >= 2 and word not in stop_words:
+                    words.append(word)
     # Deduplicate while preserving order
     seen = set()
     out = []
@@ -626,10 +620,20 @@ def skill_keywords(text):
     return out
 
 
+def _is_east_asian_text(text):
+    """Recognizes scripts that commonly require character n-gram tokenization."""
+    for char in text:
+        name = unicodedata.name(char, '')
+        if ('CJK' in name or 'HIRAGANA' in name or 'KATAKANA' in name
+                or 'HANGUL' in name):
+            return True
+    return False
+
+
 def _split_markdown(text):
-    """按二级/三级标题切段，标题作为 key。"""
+    """Splits text at level-two and level-three headings, using each heading as a key."""
     out = []
-    title = '概览'
+    title = 'Overview'
     buf = []
     for line in text.split('\n'):
         if line.startswith('## ') or line.startswith('### '):
@@ -645,7 +649,7 @@ def _split_markdown(text):
 
 
 def _md_first_sentence(path):
-    """取 .md 的第一段有效文字作为摘要。"""
+    """Uses the first non-empty content line, skipping headings and front matter, as its summary."""
     try:
         with open(path, encoding='utf-8') as f:
             for line in f:
@@ -664,7 +668,7 @@ def _md_first_sentence(path):
 
 
 def skill_roots(base_dir=None):
-    """技能可能的位置：环境变量 -> 本模块向上找 -> 当前目录。"""
+    """Returns candidate skill locations from environment variables, module ancestors, and cwd."""
     roots = []
     env = os.environ.get('PIPECAD_SKILLS')
     if env:
@@ -688,7 +692,7 @@ def skill_roots(base_dir=None):
 
 
 def find_skill(base_dir=None):
-    """找到并（首次）加载技能；找不到返回 None，调用方静默跳过。"""
+    """Finds and loads the skill once, or returns None if it is unavailable."""
     for root in skill_roots(base_dir):
         if not root or not os.path.isdir(root):
             continue
@@ -700,7 +704,7 @@ def find_skill(base_dir=None):
 
 
 def skill_status():
-    """selfcheck 用：报告技能是否加载、规模、MetaData 位置。"""
+    """Reports skill load status, index size, and metadata location for selfcheck."""
     pack = find_skill()
     if pack is None:
         return None
@@ -730,7 +734,7 @@ def _safe(elem, attr, default=''):
 
 
 def element_path(elem):
-    '''沿 Owner 上溯，得到 /SITE-A/ZONE-01/PIPE-101/BRAN-2 这样的路径。'''
+    '''Walks Owner links to build a path such as /SITE-A/ZONE-01/PIPE-101/BRAN-2.'''
     names = []
     cur = elem
     guard = 0
@@ -749,7 +753,7 @@ def element_path(elem):
 
 
 def snapshot(world=None, max_nodes=MAX_NODES, max_depth=MAX_DEPTH):
-    '''生成缩进树摘要。world 为空表示当前未打开项目。'''
+    '''Builds an indented tree summary. An empty world means no project is open.'''
     if world is None:
         try:
             from PipeCAD.Database import Project
@@ -786,7 +790,7 @@ def snapshot(world=None, max_nodes=MAX_NODES, max_depth=MAX_DEPTH):
 
 
 def current_selection_context():
-    '''当前元素 + 它的直属成员，用于"这个""当前"类指代。'''
+    '''Returns the selected element and its direct members for references such as "this" or "current".'''
     try:
         from PipeCAD.Database import DbElement
         ce = DbElement.Current
@@ -812,98 +816,51 @@ def build_context(with_tree=True):
 # Prompt Assembly
 # ==========================================================================
 
-SYSTEM_PROMPT = '''你是 PipeCAD 的建模助手。你的输出会被解析成 Python 代码并在 PipeCAD 里执行。
-
-# Database Level (must comply strictly)
-WORLD > SITE > ZONE > PIPE > BRANCH > 管件(ELBO/TEE/FLAN/VALV/...)
-EQUIPMENT / STRUCTURE 挂在 ZONE 下；BOX / CYLINDER / NOZZLE 挂在 EQUIPMENT 或 STRUCTURE 下。
-
-# Available API
-- Project.Current / Project.World / DbElement.Current 已注入为 Project / world / ce
-- Position(x, y, z) / Direction(x, y, z) / Orientation(dx, dy) 来自 PipeCAD.Geometry
-  **Orientation 只接受两个 Direction 对象**：Orientation(Direction(1,0,0), Direction(0,1,0))。
-  写成 Orientation(120, 0)、Orientation(1,0,0) 一律报
-  `TypeError: incompatible constructor arguments`，因为底层是 C++ 绑定，不做隐式转换。
-  只需"绕 Z 转 30 度"这类需求时，别自己算矩阵，用 rotate_z(...) 或
-  make_orientation(direction=(...), rotate=30)。
-- 父元素.Create(index, 'TYPE')  创建子元素，TYPE 用 ShortName（大写）
-- elem.Name = '...'  直接读写属性；属性名必须来自下面 schema 的 attrs 列表
-- **元素的类型在创建那一刻就定了**，之后没有任何属性可以改它。
-  `elem.ShortName = 'PIPE'` / `elem.Type = ...` 这类写法一定会报
-  `AttributeError: Attribute ShortName not found!`，因为 ShortName 不是可写属性。
-  需要指定类型时只能：parent.Create(index, '类型ShortName')，或直接用 builder。
-- builder 函数（优先使用，内部已处理取或建与几何）：
-  ensure_site(name)
-  ensure_zone(site, name)
-  create_pipe(zone, name, bore=None, spec=None)      # PIPE is a logical container with no geometric attributes
-  create_branch(pipe, name, head=None, direction=None)  # Geometry falls in BRAN's Hposition/Hdirection
-  create_equipment(zone, name, position=None, function=None, description=None)
-  create_box(parent, name, origin, x_length, y_length, z_length, orientation=None)
-  create_cylinder(parent, name, base, height, diameter, orientation=None)
-  distance(p1, p2) / unit_vector(p1, p2) / segment_lengths(points)
-  make_orientation(direction=None, rotate=0)   # Orientation created from direction/Z-axis rotation angle
-  rotate_z(orientation_or_direction, degrees)  # Rotate around Z axis
-  以上函数**已经直接可用，不需要 import**。
-
-# Hard Rules
-0. 上面列出的 builder 函数、Position / Direction / Orientation、Project / world / ce
-   都在命名空间里现成可用，**不要为它们写 import**。
-   `import ensure_site` 或 `from PipeCAD.Database import ensure_site` 一定会失败，
-   因为它们是本程序提供的函数，不属于 PipeCAD 模块。
-   只在确实要用 math 时才写 `import math`。
-1. 不要写事务（OpenTransaction/CommitTransaction 由外部统一处理），不要 import 除
-   PipeCAD.Database / PipeCAD.Geometry / PipeCAD.Graphics / math 之外的模块。
-2. 不要用 open/eval/exec/getattr 等反射或 IO 能力。
-3. 单位默认毫米（mm），角度用度。用户给了米就换算成毫米。
-4. 名称（Name）在同一父元素下唯一；已存在就复用，不要重复创建。
-5. 属性名必须出现在 schema 中，不要臆造；不确定的属性宁可不设。
-   ShortName / Type / Owner / Members / Index / ID 都是只读元信息，不能赋值也不能读。
-6. 只在确有必要时创建元素。用户只是提问/闲聊时，不要输出代码。
-7. 代码最后用 result 汇总本次创建或修改的元素，例如：
-   result = [site, zone, pipe]
-8. 元件级管件（ELBO/TEE/FLAN/VALV）需要 spec/catalogue 引用，如果没有明确依据，
-   只建到 PIPE/BRANCH 层级，并在说明里指出"元件几何需按项目 spec 补齐"。
-
-# Output Format
-Reply in English: first briefly explain in one sentence what you will do, then output
-**exactly one** ```python code block.
-Do not output multiple code blocks or explanatory lists outside the code block.
-'''
+def build_system_prompt(schema_text, skill_text='', language='en'):
+    language = _validate_request_language(language)
+    l10n = Localization(language, auto_detect=False)
+    localized_prompt = l10n._('system_prompt')
+    if localized_prompt == 'system_prompt':
+        raise ValueError(_diag('runtime.missing_system_prompt', language=language))
+    return _append_prompt_context(localized_prompt, schema_text, skill_text)
 
 
-def build_system_prompt(schema_text, skill_text=''):
-    prompt = SYSTEM_PROMPT + '\n# This turn's relevant schema\n' + (
-        schema_text or '(未检索到，按通用层级建模)')
+def _append_prompt_context(prompt, schema_text, skill_text):
+    prompt += '\n# This turn\'s relevant schema\n' + (
+        schema_text or '(No matching types found; follow the general modeling hierarchy.)')
     if skill_text:
         prompt += ('\n\n# Official Development Skill Excerpt\n'
-                   '以下是 pipecad-dev-python 技能里与本次需求相关的部分，'
-                   'API 用法以它为准；与上面冲突时以技能为准。\n\n' + skill_text)
+                   'Use this relevant excerpt from the pipecad-dev-python skill; '
+                   'prefer its API usage if it conflicts with the prompt above.\n\n' + skill_text)
     return prompt
 
 
-def build_user_prompt(user_text, model_context, extra=''):
-    parts = ['用户请求：\n%s' % user_text.strip()]
+def build_user_prompt(user_text, model_context, extra='', language='en'):
+    language = _validate_request_language(language)
+    l10n = Localization(language, auto_detect=False)
+    parts = [l10n._('user_request') + ':\n%s' % user_text.strip()]
     if model_context:
-        parts.append('当前模型状态（供指代与复用，避免重复建同名元素）：\n%s' % model_context)
+        parts.append(l10n._('current_model_state') + ':\n%s' % model_context)
     if extra:
         parts.append(extra)
     return '\n\n'.join(parts)
 
 
-def build_fix_prompt(script, issues_text):
-    '''校验/执行失败后的自修复提示。'''
-    return ('上一次生成脚本未通过检查，问题如下：\n%s\n\n'
-            '原脚本：\n```python\n%s\n```\n'
-            '请只修正这些问题，重新输出一个完整可执行的代码块（不要解释改动细节）。'
-            % (issues_text, script.strip()))
+def build_fix_prompt(script, issues_text, language='en'):
+    '''Builds the repair prompt after validation or execution fails.'''
+    return Localization(language, auto_detect=False)._(
+        'repair_prompt', issues_text=issues_text, script=script.strip())
 
 
 def build_messages(user_text, schema_text, model_context, extra='', history=None,
-                   skill_text=''):
-    msgs = [{'role': 'system', 'content': build_system_prompt(schema_text, skill_text)}]
+                   skill_text='', language='en'):
+    language = _validate_request_language(language)
+    msgs = [{'role': 'system',
+             'content': build_system_prompt(schema_text, skill_text, language)}]
     for role, content in (history or [])[-6:]:
         msgs.append({'role': role, 'content': content})
-    msgs.append({'role': 'user', 'content': build_user_prompt(user_text, model_context, extra)})
+    msgs.append({'role': 'user',
+                 'content': build_user_prompt(user_text, model_context, extra, language)})
     return msgs
 
 
@@ -952,7 +909,7 @@ def load_config(path=None):
 
 
 def init_config(api_key=None, base_url=None, model=None, mock=None, path=None, overwrite=False):
-    '''生成/更新模型配置文件，省得手写 json。
+    '''Creates or updates the model configuration file.
 
     from PipeCAD.AI import Assistant
     Assistant.init_config(api_key='sk-xxx')                 # DeepSeek default
@@ -960,7 +917,8 @@ def init_config(api_key=None, base_url=None, model=None, mock=None, path=None, o
     Assistant.init_config(api_key='x', base_url='http://localhost:11434/v1',
                           model='qwen2.5-coder')            # Local Ollama
 
-    默认写到 ~/.pipecad_ai.json；路径可用 PIPECAD_AI_CONFIG 或 path 参数改。
+    By default, writes to ~/.pipecad_ai.json. Use PIPECAD_AI_CONFIG or the path
+    argument to specify a different location.
     '''
     target = path or os.environ.get('PIPECAD_AI_CONFIG') or os.path.join(
         os.path.expanduser('~'), '.pipecad_ai.json')
@@ -993,10 +951,11 @@ def init_config(api_key=None, base_url=None, model=None, mock=None, path=None, o
         os.makedirs(d)
     with open(target, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-    print('配置已写入：%s' % target)
+    print(_diag('runtime.config_written', path=target))
     print('  base_url = %s' % data.get('base_url'))
     print('  model    = %s' % data.get('model'))
-    print('  api_key  = %s' % ('已配置' if data.get('api_key') else '(空)'))
+    print('  api_key  = %s' % _diag(
+        'runtime.api_key_configured' if data.get('api_key') else 'runtime.api_key_missing'))
     print('  mock     = %s' % data.get('mock'))
     return target
 
@@ -1012,8 +971,7 @@ class LLMClient(object):
         cfg = dict(self.config)
         cfg.update(overrides)
         if not cfg.get('api_key'):
-            raise LLMError('No api_key configured: fill it in ~/.pipecad_ai.json or '
-                           'set PIPECAD_AI_KEY, or click Settings in the window.')
+            raise LLMError(_diag('runtime.api_key_missing_message'))
 
         url = cfg['base_url'].rstrip('/') + '/chat/completions'
         payload = {
@@ -1052,7 +1010,8 @@ class LLMClient(object):
         try:
             return body['choices'][0]['message']['content']
         except Exception:
-            raise LLMError('Unexpected response format: %s' % str(body)[:300])
+            raise LLMError(_diag('runtime.response_format_error',
+                                 body=str(body)[:300]))
 
 
 # --------------------------------------------------------------------- mock
@@ -1081,10 +1040,11 @@ def _mock_reply(messages):
 # Here we register the fallback 'idna' encoding before first model call to let stdlib work normally.
 
 class _AsciiOnlyIdnaCodec(object):
-    '''只管 ASCII 域名的 idna 降级实现。
+    '''ASCII-only fallback implementation of the IDNA codec.
 
-    内网代理、API 域名都是 ASCII；真正需要 punycode 的场景极少，
-    遇到了会明确报错，而不是悄悄给出错误地址。
+    Internal proxies and API hostnames are usually ASCII. If a non-ASCII
+    hostname requires punycode, this implementation raises an explicit error
+    rather than silently producing an invalid address.
     '''
 
     def encode(self, input, errors='strict'):
@@ -1093,7 +1053,7 @@ class _AsciiOnlyIdnaCodec(object):
         try:
             return str(input).encode('ascii'), len(input)
         except UnicodeEncodeError:
-            raise UnicodeError('当前 Python 缺少完整 idna 支持，域名含非 ASCII 字符：%r' % input)
+            raise UnicodeError(_diag('runtime.idna_unicode_error', value=repr(input)))
 
     def decode(self, input, errors='strict'):
         if isinstance(input, str):
@@ -1105,12 +1065,12 @@ _idna_patched = False
 
 
 def ensure_idna():
-    '''确保能编解码 idna：标准库有就直接用，缺了就补一个 ASCII 降级实现。
+    '''Ensures the IDNA codec is available, adding an ASCII-only fallback if needed.
 
-    `codecs.lookup` 是 C 实现，会直接读内部编码缓存，`codecs.register` /
-    `encodings.search_function` 都插不进去（实测无效）。所以这里的做法是：
-    先试真实查找；失败就把 `encodings.idna` 模块**塞进 sys.modules**，
-    这样 `import encodings.idna` 与 `codecs.lookup('idna')` 都会命中它。
+    `codecs.lookup` is implemented in C and reads its internal codec cache;
+    `codecs.register` and `encodings.search_function` do not populate it here.
+    Therefore, if the real codec is unavailable, this function inserts a
+    fallback `encodings.idna` module into `sys.modules` so imports can find it.
     '''
     global _idna_patched
     import codecs
@@ -1176,10 +1136,11 @@ def ensure_idna():
 
 
 def _ascii_host(url):
-    '''把 URL 的 host 部分统一转成 ASCII（中文域名转 punycode，失败则保留原样）。
+    '''Converts the URL hostname to ASCII, using punycode for internationalized names.
 
-    标准库对非 ASCII host 的处理依赖 idna 编码器；在精简 Python 里这同样是雷。
-    返回处理后的 URL；无法解析时原样返回。
+    The standard library relies on the IDNA codec for non-ASCII hostnames, which
+    may be unavailable in the embedded Python runtime. Returns the processed URL,
+    or the original URL if parsing or conversion fails.
     '''
     try:
         parts = urllib.parse.urlsplit(url)
@@ -1202,43 +1163,34 @@ def _ascii_host(url):
 
 
 def _net_error_hint(ex, url, idna_ok=True):
-    '''把网络异常翻译成能直接照做的提示。
+    '''Converts network exceptions into actionable troubleshooting guidance.
 
-    精简版 Python 的网络栈和标准 CPython 有不少差别，原始异常往往只有一句
-    "unknown encoding: idna" 或 "CERTIFICATE_VERIFY_FAILED"，看不出怎么办。
+    The embedded Python networking stack differs from standard CPython. Raw
+    exceptions such as "unknown encoding: idna" or "CERTIFICATE_VERIFY_FAILED"
+    may not explain how to resolve the problem.
     '''
     msg = str(ex) or type(ex).__name__
     low = msg.lower()
-    head = 'Failed to call the model: %s' % msg
+    head = _diag('runtime.network_head', error=msg)
 
     if 'idna' in low or 'unknown encoding' in low:
-        return (head + '\n'
-                'Cause: the embedded Python lacks the idna codec (encodings/idna.py was trimmed).\n'
-                'Fix: an ASCII fallback has been installed automatically since 0.2.2. '
-                'If this still fails, run Assistant.selfcheck() and check the Network section, '
-                'or set base_url to an IP / internal proxy.')
+        return _diag('runtime.network_idna', head=head)
     if 'timed out' in low or 'timeout' in low:
-        return (head + '\n'
-                'Fix: network unreachable. Check whether base_url=%s is reachable and '
-                'whether a proxy is needed (HTTP_PROXY/HTTPS_PROXY).' % url)
+        return _diag('runtime.network_timeout', head=head, url=url)
     if 'certificate' in low or 'ssl' in low:
-        return (head + '\n'
-                'Fix: certificate verification failed. For an internal proxy / self-signed '
-                'certificate, add "verify_ssl": false to the config.')
+        return _diag('runtime.network_ssl', head=head)
     if ('refused' in low or 'unreachable' in low or 'getaddrinfo' in low
             or 'name or service' in low or '10061' in low or '10060' in low
             or 'actively refused' in low):
-        return (head + '\n'
-                'Fix: cannot connect to %s. Check the network / proxy, or make sure base_url '
-                'is the API root (e.g. https://api.deepseek.com/v1).' % url)
+        return _diag('runtime.network_unreachable', head=head, url=url)
     if '401' in msg or 'unauthorized' in low:
-        return head + '\nFix: api_key is invalid or expired. Run Assistant.init_config(api_key="sk-...") to rewrite it.'
+        return _diag('runtime.network_unauthorized', head=head)
     if '404' in msg:
-        return head + '\nFix: base_url is missing or has an extra /v1 path. Current: %s.' % url
+        return _diag('runtime.network_not_found', head=head, url=url)
     if '402' in msg or 'insufficient' in low:
-        return head + '\nFix: insufficient account balance.'
+        return _diag('runtime.network_insufficient', head=head)
     if '429' in msg or 'rate limit' in low:
-        return head + '\nFix: rate limited, retry later.'
+        return _diag('runtime.network_rate_limit', head=head)
     return head
 
 
@@ -1266,7 +1218,7 @@ def _members(parent):
 
 
 def find_child(parent, name):
-    '''按名称在直属成员里找元素，找不到返回 None。'''
+    '''Finds a direct child by name, or returns None.'''
     for m in _members(parent):
         try:
             if str(m.Name) == str(name):
@@ -1277,7 +1229,7 @@ def find_child(parent, name):
 
 
 def _set(elem, attr, value):
-    '''属性写入：不存在就跳过，避免把"属性名猜错"变成运行期异常。'''
+    '''Writes an attribute when possible; missing attributes return False instead of raising.'''
     try:
         setattr(elem, attr, value)
         return True
@@ -1298,7 +1250,7 @@ def _create(parent, type_name, name=None, index=0):
 
 # --------------------------------------------------------------------- Hierarchy Guarantee
 def ensure_site(name, world=None):
-    '''取或建 SITE。'''
+    '''Finds or creates a SITE.'''
     if world is None:
         from PipeCAD.Database import Project
         world = Project.World
@@ -1309,7 +1261,7 @@ def ensure_site(name, world=None):
 
 
 def ensure_zone(site, name):
-    '''取或建 ZONE。'''
+    '''Finds or creates a ZONE.'''
     hit = find_child(site, name)
     if hit is not None:
         return hit
@@ -1317,10 +1269,10 @@ def ensure_zone(site, name):
 
 
 def create_pipe(zone, name, bore=None, spec=None):
-    '''在 ZONE 下建 PIPE，可设口径/等级。
+    '''Creates a PIPE under a ZONE and optionally sets its bore and specification.
 
-    注意：PIPE 是逻辑容器，MetaData 里没有 Position/Orientation 属性，
-    管道的位置和走向落在它下面的 BRANCH 上（见 create_branch）。
+    PIPE is a logical container and has no Position/Orientation attributes in
+    MetaData. Pipe position and direction belong to its BRANCH (see create_branch).
     '''
     pipe = _create(zone, 'PIPE', name)
     if bore is not None:
@@ -1331,10 +1283,10 @@ def create_pipe(zone, name, bore=None, spec=None):
 
 
 def create_branch(pipe, name, head=None, direction=None):
-    '''在 PIPE 下建 BRANCH（管段分支）。
+    '''Creates a BRANCH under a PIPE.
 
-    几何属性确认：BRAN 用 Hposition（头端位置）与 Hdirection/Tdirection，
-    不存在 Position —— 写 Position 只会静默失效，所以这里直接写 Hposition。
+    BRAN uses Hposition (head position) and Hdirection/Tdirection. It has no
+    Position attribute, so this function writes Hposition directly.
     '''
     bran = _create(pipe, 'BRAN', name)
     if head is not None:
@@ -1357,7 +1309,7 @@ def create_equipment(zone, name, position=None, function=None, description=None)
 
 
 def create_box(parent, name, origin, x_length, y_length, z_length, orientation=None):
-    '''长方体。origin 为 Position，尺寸单位与项目一致（一般为 mm）。'''
+    '''Creates a box. origin is a Position; dimensions use project units (usually mm).'''
     box = _create(parent, 'BOX', name)
     _set(box, 'Xlength', float(x_length))
     _set(box, 'Ylength', float(y_length))
@@ -1369,7 +1321,7 @@ def create_box(parent, name, origin, x_length, y_length, z_length, orientation=N
 
 
 def create_cylinder(parent, name, base, height, diameter, orientation=None):
-    '''立式圆柱（罐体/筒体常用）。base 为底面中心。'''
+    '''Creates a cylinder, commonly used for vessels. base is the bottom-face center.'''
     cyl = _create(parent, 'CYLI', name)
     _set(cyl, 'Height', float(height))
     _set(cyl, 'Diameter', float(diameter))
@@ -1385,17 +1337,17 @@ def distance(p1, p2):
 
 
 def _xyz(p):
-    '''Position 的 x/y/z 取值，兼容 px/py/pz 或 X/Y/Z 命名。'''
+    '''Extracts x/y/z coordinates, supporting px/py/pz and X/Y/Z attribute names.'''
     for names in (('x', 'y', 'z'), ('X', 'Y', 'Z'), ('px', 'py', 'pz')):
         try:
             return tuple(float(getattr(p, n)) for n in names)
         except Exception:
             continue
-    raise ValueError('无法读取 Position 的三维分量')
+    raise ValueError(_diag('runtime.position_components_unreadable'))
 
 
 def unit_vector(p1, p2):
-    '''由两点算单位方向，供 Orientation/Direction 构造使用。'''
+    '''Computes a unit direction from two points for Orientation/Direction construction.'''
     x1, y1, z1 = _xyz(p1)
     x2, y2, z2 = _xyz(p2)
     dx, dy, dz = x2 - x1, y2 - y1, z2 - z1
@@ -1404,7 +1356,7 @@ def unit_vector(p1, p2):
 
 
 def segment_lengths(points):
-    '''折线各段长度，给"总长 20 米、分三段"这类需求用。'''
+    '''Returns the length of each polyline segment, e.g. for a 20 m line split into three segments.'''
     return [distance(points[i], points[i + 1]) for i in range(len(points) - 1)]
 
 
@@ -1416,7 +1368,7 @@ _DIR_CACHE = {}
 
 
 def make_direction(*args):
-    '''方向：Direction(1,0,0) / Direction((1,0,0)) / Direction('E') / 已有对象原样返回。'''
+    '''Accepts Direction components, a tuple, a compass alias, or an existing direction object.'''
     if len(args) == 1:
         a = args[0]
         if hasattr(a, 'X') and hasattr(a, 'Y'):
@@ -1425,8 +1377,9 @@ def make_direction(*args):
             hit = _DIR_CACHE.get(a.strip().upper())
             if hit is not None:
                 return hit
-            raise ValueError('不认识的方位 %r，可用：%s'
-                             % (a, '/'.join(sorted(_DIR_CACHE))))
+            raise ValueError(_diag('runtime.unknown_direction',
+                                   direction=repr(a),
+                                   aliases='/'.join(sorted(_DIR_CACHE))))
         if isinstance(a, (tuple, list)) and len(a) == 3:
             args = tuple(a)
     if len(args) == 3:
@@ -1434,36 +1387,31 @@ def make_direction(*args):
             return tuple(float(v) for v in args)
         # _Direction is not None here, safe to call
         return _Direction(float(args[0]), float(args[1]), float(args[2]))
-    raise TypeError('方向需要三个分量，例如 Direction(1, 0, 0) 或 Direction((1, 0, 0))')
+    raise TypeError(_diag('runtime.direction_components_required'))
 
 
 def _init_directions():
-    '''方位别名 -> 单位方向。写成函数是为了在 _Direction 不可用时也能装上。'''
-    if _DIR_CACHE:
-        return
-    table = {'E': (1, 0, 0), 'EAST': (1, 0, 0), '东': (1, 0, 0),
-             'N': (0, 1, 0), 'NORTH': (0, 1, 0), '北': (0, 1, 0),
-             'U': (0, 0, 1), 'UP': (0, 0, 1), '上': (0, 0, 1)}
-    for k, v in table.items():
-        try:
-            _DIR_CACHE[k] = make_direction(*v)
-        except Exception:
-            pass
+    '''Initializes compass aliases as unit vectors, including when _Direction is unavailable.'''
+    _DIR_CACHE.clear()
+    vectors = {'east': (1, 0, 0), 'north': (0, 1, 0), 'up': (0, 0, 1)}
+    aliases = Localization.get_instance().get_data('direction_aliases', {})
+    for direction, vector in vectors.items():
+        for alias in aliases.get(direction, []):
+            _DIR_CACHE[alias.strip().upper()] = make_direction(*vector)
 
 
 def make_orientation(direction=None, rotate=0.0, x_direction=None):
-    '''造坐标系 Orientation，只接受"实数角度"，不吃裸数字。
+    '''Builds an Orientation and rejects bare numeric direction values.
 
-    direction   X 轴指向：'E' / (1,0,0) / Direction(...)，默认东
-    rotate      绕 Z 轴逆时针角度（度）
-    x_direction 直接给 X 方向的 Direction，给了就忽略 direction
-    底层 Orientation 必须由两个 Direction 构造，这里负责把它们算好。
+    direction: X-axis direction ('E', (1, 0, 0), or Direction(...)); defaults east.
+    rotate: Counterclockwise rotation around Z, in degrees.
+    x_direction: Explicit X direction; when provided, direction is ignored.
+    The underlying Orientation requires two Direction objects, which are computed here.
     '''
     if _Orientation is None:
-        raise RuntimeError('当前环境没有 PipeCAD.Geometry.Orientation')
+        raise RuntimeError(_diag('runtime.orientation_unavailable'))
     if isinstance(direction, (int, float)) or isinstance(rotate, str):
-        raise TypeError('make_orientation(direction=..., rotate=度)。'
-                        '不要把两个数字直接当坐标系，Orientation 需要两个 Direction。')
+        raise TypeError(_diag('runtime.orientation_arguments'))
     if x_direction is None:
         base = 0.0
         if isinstance(direction, str):
@@ -1481,7 +1429,7 @@ def make_orientation(direction=None, rotate=0.0, x_direction=None):
 
 
 def _axes_from_angle(deg):
-    '''角度 -> (X 方向, Y 方向)，两个都是 Direction。'''
+    '''Converts an angle to X- and Y-axis Direction objects.'''
     a = math.radians(deg)
     c, s = math.cos(a), math.sin(a)
     if _Direction is None:
@@ -1490,14 +1438,14 @@ def _axes_from_angle(deg):
 
 
 def _xyz_like(v):
-    '''同时支持 Direction(X/Y/Z) 与 tuple/list。'''
+    '''Returns coordinates from a Direction or a tuple/list.'''
     if isinstance(v, (tuple, list)):
         return tuple(float(x) for x in v)
     return _xyz(v)
 
 
 def rotate_z(target, degrees):
-    '''绕 Z 轴旋转：Direction 进 Direction 出，Orientation 进 Orientation 出。'''
+    '''Rotates around Z, returning a Direction for Direction input or an Orientation for Orientation input.'''
     deg = float(degrees)
     if hasattr(target, 'XDirection'):
         try:
@@ -1522,7 +1470,7 @@ def rotate_z(target, degrees):
 
 
 def _coerce_orientation(value):
-    '''把用户/模型给的各种"坐标系写法"统一成 Orientation（或 None）。'''
+    '''Normalizes supported user/model coordinate-system forms to an Orientation or None.'''
     if value is None:
         return None
     if _Orientation is not None:
@@ -1547,9 +1495,9 @@ _init_directions()
 
 
 # --------------------------------------------------------------------- Binding Layer Safe Wrapper
-# Why wrap: these are C++ binding types, constructors only accept exact signatures—
+# Why wrap: these are C++ binding types, constructors only accept exact signatures -
 #   Orientation(120, 0)                    -> TypeError: incompatible constructor arguments
-#   Position(x=1, y=2, z=3)                -> TypeError（不支持关键字参数）
+#   Position(x=1, y=2, z=3)                -> TypeError (keyword arguments are unsupported)
 #   Direction(Position(0,0,0), (0,1,0))    -> TypeError
 # Model will almost certainly write this once. Rather than let it fail and retry with traceback,
 # catch common patterns; truly unreasonable input still throws, won't be silently swallowed.
@@ -1566,7 +1514,7 @@ def _safe_position(*args, **kwargs):
             return tuple(float(v) for v in args)
         if len(args) == 1 and isinstance(args[0], (tuple, list)) and len(args[0]) == 3:
             return tuple(float(v) for v in args[0])
-        raise TypeError('Position 需要三个分量，例如 Position(0, 0, 0)')
+        raise TypeError(_diag('runtime.position_arguments'))
     if not kwargs and len(args) in (0, 3):
         return raw(*args)
     # Keywords / single-param tuple / single-param Position: all decompose to xyz then call original constructor
@@ -1592,7 +1540,7 @@ def _safe_position(*args, **kwargs):
 def _safe_orientation(*args, **kwargs):
     raw = _Orientation
     if raw is None:
-        raise RuntimeError('当前环境没有 PipeCAD.Geometry.Orientation')
+        raise RuntimeError(_diag('runtime.orientation_unavailable'))
     if kwargs and not args:
         return make_orientation(**kwargs)
     if len(args) == 0:
@@ -1658,10 +1606,9 @@ DANGEROUS_CALLS = {'Delete'}  # Allowed but requires confirmation
 # Here we only warn on "obviously wrong at a glance" patterns (runtime safe wrapper will catch),
 # goal is for users to know script has issues at preview, not fail after execution.
 GEOM_SIGNATURES = {
-    'Orientation': "Orientation(Direction dx, Direction dy)：两个 Direction 对象。"
-                   "只想绕 Z 转角度就写 make_orientation(rotate=30)",
-    'Direction': "Direction(x, y, z)：三个数字，例如 Direction(1, 0, 0)",
-    'Position': "Position(x, y, z)：三个数字，例如 Position(0, 0, 0)",
+    'Orientation': 'validator.orientation_signature',
+    'Direction': 'validator.direction_signature',
+    'Position': 'validator.position_signature',
 }
 
 # These methods have geometry semantics but different signature from "construct new geometry", cannot use above checks
@@ -1680,7 +1627,7 @@ BUILDER_TYPES = {
 
 
 def const_str(node):
-    '''兼容 3.6 的 ast.Str 与 3.8+ 的 ast.Constant。'''
+    '''Supports both ast.Str in Python 3.6 and ast.Constant in Python 3.8+.'''
     if isinstance(node, ast.Constant) and isinstance(getattr(node, 'value', None), str):
         return node.value
     cls = getattr(ast, 'Str', None)
@@ -1696,7 +1643,9 @@ class Issue(object):
         self.msg = msg
 
     def __str__(self):
-        return '[%s] line %s: %s' % (self.level, self.line, self.msg)
+        level_key = 'validator.level_' + self.level
+        return _diag('validator.issue_format',
+                     level=_diag(level_key), line=self.line, message=self.msg)
 
     __repr__ = __str__
 
@@ -1721,13 +1670,13 @@ class GuardResult(object):
 
 
 def check(script, metadata=None):
-    '''返回 GuardResult。metadata 为 None 时只做结构与名字校验。'''
+    '''Returns a GuardResult. If metadata is None, only structure and names are checked.'''
     res = GuardResult()
     try:
         tree = ast.parse(script)
     except SyntaxError as ex:
         res.issues.append(Issue('error', getattr(ex, 'lineno', 0) or 0,
-                                'syntax error: %s' % ex.msg))
+                                _diag('validator.syntax_error', error=ex.msg)))
         return res
     res.tree = tree
 
@@ -1741,9 +1690,10 @@ def check(script, metadata=None):
         _check_assign(node, res, metadata, var_types)
         if isinstance(node, (ast.Global, ast.Nonlocal)):
             res.issues.append(Issue('error', getattr(node, 'lineno', 0),
-                                    'global/nonlocal 不允许'))
+                                    _diag('validator.global_nonlocal')))
         if isinstance(node, ast.ClassDef):
-            res.issues.append(Issue('warning', node.lineno, '脚本里定义 class 通常没必要'))
+            res.issues.append(Issue('warning', node.lineno,
+                                    _diag('validator.class_definition')))
 
     # Same node may hit multiple checks (e.g., Call part of both Expr and Assign value), deduplicate
     seen, uniq = set(), []
@@ -1760,53 +1710,50 @@ def check(script, metadata=None):
 # --------------------------------------------------------------------- Check Items
 # These are "type/metadata" level things, read-only; writing throws AttributeError not silent failure.
 # Model's most common mistake: wanting to change element type. Correct: give ShortName at creation or use builder directly.
-READONLY_META_ATTRS = {
-    'ShortName': "元素类型在创建时由 Create(index, 'TYPENAME') 决定，不能事后修改；"
-                 "请直接用 create_pipe / create_equipment / create_box 等 builder，"
-                 "或 parent.Create(index, TYPE_SHORTNAME)",
-    'Type': "类型不可写；创建时用 parent.Create(index, TYPE_SHORTNAME) 指定",
-    'Owner': "父子关系由 Create 时的 parent 决定，不能改 Owner",
-    'Members': "成员列表只读，请用 parent.Create 添加子元素",
-    'Index': "索引只读",
-    'ID': "ID 只读",
-}
+READONLY_META_ATTRS = frozenset(('ShortName', 'Type', 'Owner', 'Members', 'Index', 'ID'))
 
 
 def _check_import(node, res):
     if isinstance(node, ast.Import):
         for a in node.names:
             if not a.name.startswith(ALLOWED_MODULES):
-                res.issues.append(Issue('error', node.lineno, '禁止 import %s' % a.name))
+                res.issues.append(Issue('error', node.lineno,
+                                        _diag('validator.import_blocked', module=a.name)))
     elif isinstance(node, ast.ImportFrom):
         mod = node.module or ''
         if not mod.startswith(ALLOWED_MODULES):
-            res.issues.append(Issue('error', node.lineno, '禁止 from %s import' % mod))
+            res.issues.append(Issue('error', node.lineno,
+                                    _diag('validator.from_import_blocked', module=mod)))
         if getattr(node, 'level', 0):
-            res.issues.append(Issue('error', node.lineno, '禁止相对导入'))
+            res.issues.append(Issue('error', node.lineno,
+                                    _diag('validator.relative_import')))
         for a in node.names:
             # Star import dumps entire module symbols, bypasses attribute whitelist
             if a.name == '*':
                 res.issues.append(Issue('error', node.lineno,
-                                        '禁止 from %s import *，请写明要导入的名字' % mod))
+                                        _diag('validator.wildcard_import', module=mod)))
 
 
 def _check_name(node, res):
     if isinstance(node, ast.Name) and node.id in FORBIDDEN_NAMES:
-        res.issues.append(Issue('error', node.lineno, '禁止使用 %s' % node.id))
+        res.issues.append(Issue('error', node.lineno,
+                                _diag('validator.name_blocked', name=node.id)))
 
 
 def _check_attr(node, res):
     if not isinstance(node, ast.Attribute):
         return
     if node.attr in FORBIDDEN_ATTRS:
-        res.issues.append(Issue('error', node.lineno, '禁止访问 %s' % node.attr))
+        res.issues.append(Issue('error', node.lineno,
+                                _diag('validator.attribute_blocked', attribute=node.attr)))
         return
     # Reading read-only metadata also throws AttributeError (e.g. x = ce.ShortName),
     # This type of access is almost always model misuse, point out directly in validation.
     if node.attr in READONLY_META_ATTRS:
+        explanation = _diag('validator.readonly_meta.' + node.attr)
         res.issues.append(Issue('warning', node.lineno,
-                                '读取 %s 会抛 AttributeError（元素没有这个属性）。%s'
-                                % (node.attr, READONLY_META_ATTRS[node.attr])))
+                                _diag('validator.readonly_read', attribute=node.attr,
+                                      explanation=explanation)))
 
 
 def _check_call(node, res, metadata):
@@ -1815,10 +1762,12 @@ def _check_call(node, res, metadata):
     fn = node.func
     name = fn.attr if isinstance(fn, ast.Attribute) else (fn.id if isinstance(fn, ast.Name) else '')
 
-    if name in FORBIDDEN_CALLS:        res.issues.append(Issue('error', node.lineno,
-                                '%s() 由执行器统一管理，脚本里不要调用' % name))
+    if name in FORBIDDEN_CALLS:
+        res.issues.append(Issue('error', node.lineno,
+                                _diag('validator.transaction_managed', name=name)))
     if name in DANGEROUS_CALLS:
-        res.issues.append(Issue('warning', node.lineno, 'Delete() 会删除元素，需人工确认'))
+        res.issues.append(Issue('warning', node.lineno,
+                                _diag('validator.delete_warning')))
     if name in GEOM_SIGNATURES and name not in GEOM_NON_CTOR:
         warn = _geom_call_problem(name, node)
         if warn:
@@ -1832,11 +1781,11 @@ def _check_call(node, res, metadata):
             if metadata is not None and type_name not in metadata.types:
                 res.issues.append(Issue(
                     'error', node.lineno,
-                    "Create(..., '%s') 类型不存在，请从 schema 中选取 ShortName" % type_name))
+                    _diag('validator.unknown_type', type_name=type_name)))
 
 
 def _is_number_node(n):
-    '''字面量数字 / 一元负号 / 简单算术，能静态判断"这是个数字"。'''
+    '''Determines whether a node is a numeric literal, unary sign, or simple arithmetic expression.'''
     if isinstance(n, ast.Constant) and isinstance(n.value, (int, float)) \
             and not isinstance(n.value, bool):
         return True
@@ -1848,24 +1797,23 @@ def _is_number_node(n):
 
 
 def _geom_call_problem(name, node):
-    '''返回问题描述；看不出问题返回空串。
+    '''Returns a problem description, or an empty string if no issue is detected.
 
-    Orientation(120, 0) 这种是模型最典型的错法：把角度当坐标系参数。
-    真实的 C++ 绑定只认 Orientation(Direction, Direction)，会抛
-    TypeError: incompatible constructor arguments。
+    A common model error is passing angles to Orientation, as in Orientation(120, 0).
+    The C++ binding only accepts Orientation(Direction, Direction), otherwise it raises
+    TypeError: incompatible constructor arguments.
     '''
     n = len(node.args)
     if name == 'Orientation':
         if n == 0 and not node.keywords:
             return ''
         if n == 2 and all(_is_number_node(a) for a in node.args):
-            return ('Orientation(%s, %s) 会报 incompatible constructor arguments：'
-                    '它只接受两个 Direction。要按角度建坐标系请用 '
-                    'make_orientation(rotate=%s)，或 Orientation(Direction(1,0,0), Direction(0,1,0))'
-                    % (_short(node.args[0]), _short(node.args[1]), _short(node.args[0])))
+            return _diag('validator.orientation_numeric',
+                         first=_short(node.args[0]), second=_short(node.args[1]),
+                         angle=_short(node.args[0]))
         if n not in (1, 2):
-            return ('Orientation 只接受 (Direction, Direction)，收到 %d 个参数。%s'
-                    % (n, GEOM_SIGNATURES['Orientation']))
+            signature = _diag(GEOM_SIGNATURES['Orientation'])
+            return _diag('validator.orientation_arity', count=n, signature=signature)
         return ''
     # Position / Direction: accept only 0 or 3 numbers; 2 numbers must be wrong
     if n in (0, 3) or not node.args:
@@ -1873,13 +1821,13 @@ def _geom_call_problem(name, node):
     if n == 1 and not node.keywords:
         return ''       # Single parameter (tuple/string) safe wrapper can handle
     if n == 2:
-        return ('%s 需要 3 个分量，收到 2 个参数，会报 incompatible constructor arguments。%s'
-                % (name, GEOM_SIGNATURES[name]))
+        signature = _diag(GEOM_SIGNATURES[name])
+        return _diag('validator.component_count', name=name, signature=signature)
     return ''
 
 
 def _short(node):
-    '''把 AST 节点还原成简短源码，用于提示信息。'''
+    '''Formats an AST node as short source text for diagnostic messages.'''
     try:
         return ast.unparse(node)
     except Exception:
@@ -1887,7 +1835,7 @@ def _short(node):
 
 
 def _check_assign(node, res, metadata, var_types):
-    '''校验 `elem.Attr = value` 与 `elem.SetAttribute('Attr', v)` 的属性名。'''
+    '''Validates attribute names in `elem.Attr = value` and `elem.SetAttribute('Attr', v)`.'''
     if isinstance(node, ast.Assign):
         # Chained assignment `a = b.Attr = v` has two targets, each may be attribute write
         for tgt in node.targets:
@@ -1912,12 +1860,14 @@ def _check_assign(node, res, metadata, var_types):
 
 def _validate_attr(attr, owner_type, lineno, res, metadata):
     if attr.startswith('_'):
-        res.issues.append(Issue('error', lineno, '禁止写入私有属性 %s' % attr))
+        res.issues.append(Issue('error', lineno,
+                                _diag('validator.private_write', attribute=attr)))
         return
     if attr in READONLY_META_ATTRS:
+        explanation = _diag('validator.readonly_meta.' + attr)
         res.issues.append(Issue('error', lineno,
-                                '%s 是只读元信息，不能赋值。%s'
-                                % (attr, READONLY_META_ATTRS[attr])))
+                                _diag('validator.readonly_write', attribute=attr,
+                                      explanation=explanation)))
         return
     if metadata is None:
         return
@@ -1926,23 +1876,24 @@ def _validate_attr(attr, owner_type, lineno, res, metadata):
             return
         res.issues.append(Issue(
             'error', lineno,
-            '属性 %s 不在 %s 的属性表中（PipeCAD 写未知属性会静默失效）' % (attr, owner_type)))
+            _diag('validator.attribute_not_valid', attribute=attr,
+                  owner_type=owner_type)))
         return
     if not metadata.attr_exist(owner_type or '', attr):
         res.issues.append(Issue('warning', lineno,
-                                '属性 %s 未在 MetaData 中检索到，可能存在拼写错误' % attr))
+                                _diag('validator.attribute_not_metadata', attribute=attr)))
 
 
 # --------------------------------------------------------------------- Type Inference
 def _root_name(node):
-    '''把 a.b.c 形式的最左变量名剥出来。'''
+    '''Extracts the root variable name from an expression such as a.b.c.'''
     while isinstance(node, ast.Attribute):
         node = node.value
     return node.id if isinstance(node, ast.Name) else ''
 
 
 def _infer_var_types(tree):
-    '''非常轻量的推断：`x = ce.Create(0,'PIPE')` 记下 x -> PIPE。'''
+    '''Infers simple variable types, such as x -> PIPE from `x = ce.Create(0, 'PIPE')`.'''
     var_types = {}
     for node in ast.walk(tree):
         if isinstance(node, ast.Assign) and len(node.targets) == 1:
@@ -1977,47 +1928,48 @@ class ExecResult(object):
         self.created = []           # [(path, type, name)]
         self.logs = []
         self.notes = []             # Auto-correction notes (redundant imports / retry after execution failure)
-        self.repaired_script = ''   # 自动修复后的最终脚本（发生过修复时才有值）
+        self.repaired_script = ''   # Final script after automatic repair, if any
         self.elapsed = 0.0
 
     def summary(self, max_items=20):
         if not self.ok:
-            return 'Execution failed: %s' % self.error
-        lines = ['Execution succeeded in %.2fs' % self.elapsed]
+            return _diag('runtime.execution_failed', error=self.error)
+        lines = [_diag('runtime.execution_succeeded', seconds=self.elapsed)]
         if self.created:
-            lines.append('Created %d elements:' % len(self.created))
+            lines.append(_diag('runtime.created_elements', count=len(self.created)))
             for p, t, n in self.created[:max_items]:
                 lines.append('  %s [%s]' % (p, t))
             if len(self.created) > max_items:
-                lines.append('  ... %d more omitted' % (len(self.created) - max_items))
+                lines.append(_diag('runtime.more_omitted',
+                                   count=len(self.created) - max_items))
         elif self.result:
-            lines.append('Result: %s' % (self.result,))
+            lines.append(_diag('runtime.result_label', result=self.result))
         if self.notes:
             lines.extend(self.notes)
         if self.logs:
-            lines.append('Script output:\n' + '\n'.join(self.logs[-10:]))
+            lines.append(_diag('runtime.script_output',
+                               output='\n'.join(self.logs[-10:])))
         return '\n'.join(lines)
 
 
 def _restricted_import(name, globals=None, locals=None, fromlist=(), level=0):
-    '''脚本里的 import 兜底：只放行白名单模块。
+    '''Import hook for executed scripts; allows only modules on the allowlist.
 
-    为什么需要它：`exec` 的 builtins 里没有 `__import__` 时，脚本中任何
-    `import` / `from ... import ...` 都会报 "ImportError: __import__ not found"。
-    直接放 builtins['__import__'] 又等于把整个文件系统/子进程暴露给模型，
-    所以这里只按 ALLOWED_MODULES 放行，其余抛出明确的 ImportError。
-    level 非 0（相对导入）一律拒绝。
+    Without `__import__` in the builtins passed to exec, every import statement
+    fails. Exposing the unrestricted builtin would also give the model access to
+    filesystem and subprocess modules, so only ALLOWED_MODULES are permitted.
+    Relative imports (nonzero level) are rejected.
     '''
     if level:
-        raise ImportError('脚本里不允许相对导入：%r' % name)
+        raise ImportError(_diag('validator.restricted_relative_import', module=repr(name)))
     fromlist = fromlist or ()
     if '*' in fromlist:
-        raise ImportError('脚本里不允许 import *，请写明要导入的名字')
+        raise ImportError(_diag('validator.restricted_wildcard_import'))
     root = str(name).split('.')[0]
     allowed = tuple(m.split('.')[0] for m in ALLOWED_MODULES)
     if root not in allowed:
-        raise ImportError('脚本里不允许导入 %r（仅允许：%s）'
-                          % (name, ', '.join(ALLOWED_MODULES)))
+        raise ImportError(_diag('validator.restricted_import', module=repr(name),
+                                modules=', '.join(ALLOWED_MODULES)))
     import builtins as _b
     return _b.__import__(name, globals, locals, fromlist, level)
 
@@ -2030,7 +1982,7 @@ def _restricted_builtins():
 
 
 def build_namespace(logs=None):
-    '''脚本可用的全部名字。这里就是能力边界，越窄越安全。'''
+    '''Builds the complete namespace available to scripts; keeping it narrow limits capabilities.'''
     from PipeCAD.Database import Project, DbElement
     from PipeCAD.Geometry import Position, Direction, Orientation
 
@@ -2046,8 +1998,8 @@ def build_namespace(logs=None):
         'Project': Project.Current,
         'ce': DbElement.Current,
         'world': Project.World,
-        # 用安全版而不是原始 C++ 绑定：Orientation(120, 0) 这类写法会被吸附成合理坐标系，
-        # 而不是抛 incompatible constructor arguments 让模型重试一轮
+        # Use the safe wrapper instead of the raw C++ binding: patterns like Orientation(120, 0)
+        # are normalized to a reasonable coordinate system instead of raising a constructor error.
         'Position': _safe_position,
         'Direction': make_direction,
         'Orientation': _safe_orientation,
@@ -2068,11 +2020,11 @@ def build_namespace(logs=None):
     return ns
 
 
-# 这些名字是命名空间里现成的，模型常常多写一行 import 把它们“导进来”
+# These names are already in the namespace; the model often adds redundant imports for them.
 #
-# 注意：只列真正注入到命名空间里的名字。`DbElement` 是类、`Project` 是实例，
-# 模型有时会 `from PipeCAD.Database import DbElement` 来判类型，这种不能删，
-# 否则脚本里就找不到这个名字了。
+# Only include names actually injected into the namespace. `DbElement` is a class
+# and `Project` is an instance. Imports for names that are not injected must remain,
+# or scripts that use them will fail.
 PREINJECTED_NAMES = (
     'ensure_site', 'ensure_zone', 'create_pipe', 'create_branch', 'create_box',
     'create_cylinder', 'create_equipment', 'distance', 'unit_vector',
@@ -2083,13 +2035,13 @@ PREINJECTED_NAMES = (
 
 
 def strip_redundant_imports(script):
-    '''删掉"导出现成名字"的那几行 import。
+    '''Removes import statements for names already injected into the script namespace.
 
-    模型看到 API 说明里有 ensure_site(...) 就会写
-    `from PipeCAD.Database import ensure_site`，而这个名字是本程序注入的，
-    不在 PipeCAD 模块里，一执行就 ImportError。这里按 AST 精确定位后删除，
-    其余代码原样保留（行号会变，但脚本是自包含的，不影响语义）。
-    返回 (新脚本, 删掉了哪些描述)。
+    A model may write `from PipeCAD.Database import ensure_site` after seeing
+    ensure_site(...) in the API documentation, even though the assistant injects
+    that name and it is not part of the PipeCAD module. Such imports cause ImportError.
+    This function removes only the matching AST nodes and preserves the remaining
+    script. Returns the updated script and descriptions of removed imports.
     '''
     try:
         tree = ast.parse(script)
@@ -2104,9 +2056,10 @@ def strip_redundant_imports(script):
             if len(keep) == len(node.names):
                 continue
             dropped = [a.name for a in node.names if a.name in PREINJECTED_NAMES]
-            notes.append('from %s import %s' % (node.module or '?', ', '.join(dropped)))
+            notes.append(_diag('runtime.redundant_from_import',
+                               module=node.module or '?', names=', '.join(dropped)))
             if keep:
-                # 还有别的名字要导入：只把这一行改窄
+                # Other names still need importing, so narrow this import statement.
                 line = script.split('\n')[node.lineno - 1]
                 new_line = 'from %s import %s' % (node.module, ', '.join(a.name for a in keep))
                 drop_lines.add((node.lineno, line, new_line))
@@ -2118,7 +2071,7 @@ def strip_redundant_imports(script):
             if len(keep) == len(node.names):
                 continue
             dropped = [a.name for a in node.names if a.name in PREINJECTED_NAMES]
-            notes.append('import %s' % ', '.join(dropped))
+            notes.append(_diag('runtime.redundant_import', names=', '.join(dropped)))
             if keep:
                 line = script.split('\n')[node.lineno - 1]
                 new_line = 'import %s' % ', '.join(a.name for a in keep)
@@ -2146,7 +2099,7 @@ def strip_redundant_imports(script):
 
 
 def _geom_call_notes(script):
-    """执行后告诉用户：哪些几何写法被吸附了、实际按什么处理。"""
+    """Reports Orientation expressions that the safe wrapper interprets as Z-axis rotations."""
     notes = []
     try:
         tree = ast.parse(script)
@@ -2162,19 +2115,17 @@ def _geom_call_notes(script):
             continue
         n = len(node.args)
         if n == 2 and all(_is_number_node(a) for a in node.args):
-            notes.append('Treated Orientation(%s, %s) as "rotate %s degrees about Z"; '
-                         'for exact axis control use make_orientation(rotate=...) or '
-                         'Orientation(Direction(1,0,0), Direction(0,1,0))'
-                         % (_short(node.args[0]), _short(node.args[1]),
-                            _short(node.args[0])))
+            notes.append(_diag('runtime.treated_orientation_two',
+                               first=_short(node.args[0]), second=_short(node.args[1]),
+                               angle=_short(node.args[0])))
         elif n == 1 and _is_number_node(node.args[0]):
-            notes.append('Treated Orientation(%s) as "rotate %s degrees about Z"'
-                         % (_short(node.args[0]), _short(node.args[0])))
+            notes.append(_diag('runtime.treated_orientation_one',
+                               angle=_short(node.args[0])))
     return notes
 
 
 def run_script(script, dry_run=False):
-    '''执行脚本。dry_run=True 时只演练：开事务、跑完、然后 Abort。'''
+    '''Executes a script. With dry_run=True, runs it in a transaction and then aborts.'''
     import time
     res = ExecResult()
     t0 = time.time()
@@ -2183,17 +2134,17 @@ def run_script(script, dry_run=False):
         from PipeCAD.Database import Project
         proj = Project.Current
         if not getattr(proj, 'IsOpen', False):
-            res.error = 'No project is currently open'
+            res.error = _diag('runtime.project_not_open_execution')
             return res
     except Exception as ex:
-        res.error = 'PipeCAD environment unavailable: %s' % ex
+        res.error = _diag('runtime.environment_unavailable', error=ex)
         return res
 
-    # 模型常写 `from PipeCAD.Database import ensure_site` —— 名字是本程序注入的，
-    # Not part of PipeCAD module. Remove such redundant imports before execution to avoid unnecessary failure.
+    # The model may import an injected name from PipeCAD.Database, where it does not exist.
+    # Remove such redundant imports before execution to avoid an unnecessary failure.
     script, stripped = strip_redundant_imports(script)
     if stripped:
-        res.notes.extend('Auto-removed redundant import: %s' % n for n in stripped)
+        res.notes.extend(stripped)
 
     # Geometry construction: Orientation(120, 0) style in safe version injected into namespace absorbs into reasonable coordinate system,
     # But must let user know "what you wrote isn't what it understands", or model keeps writing it.
@@ -2207,7 +2158,7 @@ def run_script(script, dry_run=False):
     try:
         code = compile(script, '<ai-assistant>', 'exec')
     except SyntaxError as ex:
-        res.error = 'syntax error: %s' % ex
+        res.error = _diag('validator.syntax_error', error=ex)
         return res
 
     before = _collect_paths()
@@ -2226,7 +2177,8 @@ def run_script(script, dry_run=False):
             proj.AbortTransaction()
         except Exception:
             pass
-        res.error = '%s: %s' % (type(ex).__name__, ex)
+        res.error = _diag('runtime.execution_error',
+                          error_type=type(ex).__name__, error=ex)
         res.traceback = traceback.format_exc()
         return res
     finally:
@@ -2240,7 +2192,7 @@ def run_script(script, dry_run=False):
 
 
 def _collect_paths(limit=4000):
-    '''全树路径快照，用于计算"这次到底新增了什么"。项目太大时截断。'''
+    '''Snapshots paths across the model tree to identify newly created elements; truncates large projects.'''
     paths = {}
     try:
         from PipeCAD.Database import Project
@@ -2269,20 +2221,20 @@ def _collect_paths(limit=4000):
 
 
 # ==========================================================================
-# 编排：plan → 校验 → 执行
+# Orchestration: plan -> validate -> execute
 # ==========================================================================
 
 _CODE_RE = re.compile(r'```(?:python|py)?\s*\n(.*?)```', re.S)
 
 
 class Turn(object):
-    '''一次问答的结果。script 为空表示模型只回了话，没有建模动作。'''
+    '''Result of one turn. An empty script means the model replied without a modeling action.'''
 
     def __init__(self):
         self.explanation = ''
         self.script = ''
         self.guard = None
-        self.reply = ''          # 完整原始回复
+        self.reply = ''          # Complete unmodified reply
         self.auto_fixed = False
 
     @property
@@ -2298,7 +2250,7 @@ class Turn(object):
 
 
 def split_reply(text):
-    '''拆出说明文字和第一个 python 代码块。'''
+    '''Extracts the explanation and first Python code block from a reply.'''
     m = _CODE_RE.search(text or '')
     if not m:
         return (text or '').strip(), ''
@@ -2309,8 +2261,11 @@ def split_reply(text):
 
 class AIAssistantCore(object):
     def __init__(self, client=None, metadata=None, max_fix_rounds=1, with_tree=True,
-                 use_skill=True, skill=None):
+                 use_skill=True, skill=None, language='en'):
         self.client = client or LLMClient()
+        self.language = _validate_request_language(language)
+        Localization.get_instance(self.language).set_language(self.language)
+        _init_directions()
         self.metadata = metadata or get_metadata()
         self.max_fix_rounds = max_fix_rounds
         self.with_tree = with_tree
@@ -2318,25 +2273,32 @@ class AIAssistantCore(object):
         # Skill: PipeCAD/skills/pipecad-dev-python. Fall back if not found, don't error.
         self.use_skill = use_skill
         self.skill = skill if skill is not None else (find_skill() if use_skill else None)
-        self.last_skill_text = ''    # 最近一次注入的技能片段（界面上可展示）
+        self.last_skill_text = ''    # Most recently injected skill excerpt, which may be shown in the UI
+
+    def set_language(self, language):
+        self.language = _validate_request_language(language)
+        Localization.get_instance(self.language).set_language(self.language)
+        _init_directions()
 
     # ------------------------------------------------------------------ Planning
     def plan(self, user_text, extra='', context_text=None):
-        '''生成脚本 + 静态校验（失败自动让模型改一轮）。
+        '''Generates and statically validates a script, requesting repairs up to max_fix_rounds.
 
-        context_text 由调用方在主线程取好传入 —— plan 可能被放到后台线程跑网络请求，
-        而读 PipeCAD 数据库必须在主线程，所以这里默认不碰数据库。
+        The caller must collect context_text on the main thread. plan may run in a
+        worker thread for network requests, while PipeCAD database access must stay
+        on the main thread, so this method does not access the database by default.
         '''
         schema = self.metadata.schema_digest(user_text)
         if context_text is None:
             context_text = build_context(with_tree=self.with_tree) if self.with_tree else ''
         model_ctx = context_text
 
-        # 技能片段：只注入与这句话相关的章节，检索不到就为空
+        # Inject only skill sections relevant to this request; use none when there are no matches.
         skill_text = self._skill_context(user_text)
 
         messages = build_messages(user_text, schema, model_ctx, extra,
-                                  history=self.history, skill_text=skill_text)
+                                  history=self.history, skill_text=skill_text,
+                                  language=self.language)
         self._last_messages = list(messages)
         reply = self.client.chat(messages)
 
@@ -2358,7 +2320,8 @@ class AIAssistantCore(object):
             fix_msgs.append({'role': 'assistant', 'content': reply})
             fix_msgs.append({'role': 'user',
                              'content': build_fix_prompt(turn.script,
-                                                         turn.guard.errors_text())})
+                                                         turn.guard.errors_text(),
+                                                         self.language)})
             reply = self.client.chat(fix_msgs)
             turn.reply = reply
             new_explain, new_script = split_reply(reply)
@@ -2374,10 +2337,11 @@ class AIAssistantCore(object):
 
     # ------------------------------------------------------------------ Execution
     def execute(self, script, dry_run=False):
-        '''执行脚本。失败时把真实异常回喂模型，自动改一版再执行（最多 max_fix_rounds 轮）。
+        '''Executes the script and, on failure, sends the actual exception to the model for repair.
 
-        静态校验拦不住的错误（属性名不对、类型判断错、运行时 AttributeError）
-        只有真的跑一遍才知道，所以这条自修复通路必须有，否则用户只看到一行报错。
+        Errors that static validation cannot catch, such as invalid attributes, type
+        assumptions, or runtime AttributeError, only appear during execution. This
+        repair path can correct them before returning the failure to the user.
         '''
         result = run_script(script, dry_run=dry_run)
         if result.ok:
@@ -2390,14 +2354,14 @@ class AIAssistantCore(object):
             rounds += 1
             try:
                 fixed = self._repair_after_error(script, result)
-            except Exception as ex:      # 网络/解析问题不该盖掉原始错误
-                result.notes.append('Auto-fix incomplete: %s' % ex)
+            except Exception as ex:      # Network or parsing failures must not hide the original error.
+                result.notes.append(_diag('runtime.auto_fix_incomplete', error=ex))
                 break
             if not fixed:
                 break
             script = fixed
             result = run_script(script, dry_run=dry_run)
-            result.notes.append('Auto-corrected the script after a runtime error (round %d)' % rounds)
+            result.notes.append(_diag('runtime.auto_corrected', round=rounds))
             if result.ok:
                 self.history.append(('assistant', '[Execution result] ' + result.summary()))
                 self._trim()
@@ -2406,23 +2370,25 @@ class AIAssistantCore(object):
         return result
 
     def _repair_after_error(self, script, result):
-        '''把运行时异常和 traceback 回喂模型，返回修正后的脚本（失败返回 ''）。'''
+        '''Sends the runtime exception and traceback to the model; returns a repaired script or ''.'''
         messages = list(getattr(self, '_last_messages', None) or [])
         if not messages:
-            messages = build_messages('修正脚本', self.metadata.schema_digest(script), '',
-                                      history=self.history)
-        detail = '运行时错误：%s' % result.error
+            messages = build_messages(_diag('runtime.repair_request'),
+                                      self.metadata.schema_digest(script), '',
+                                      history=self.history, language=self.language)
+        detail = _diag('runtime.runtime_error', error=result.error)
         if result.traceback:
-            detail += '\n\n调用栈（末尾几行）：\n' + '\n'.join(
+            detail += '\n\n' + _diag('runtime.traceback_tail') + '\n' + '\n'.join(
                 result.traceback.strip().split('\n')[-8:])
-        messages.append({'role': 'user', 'content': build_fix_prompt(script, detail)})
+        messages.append({'role': 'user',
+                         'content': build_fix_prompt(script, detail, self.language)})
         reply = self.client.chat(messages)
         _, new_script = split_reply(reply)
         return new_script or ''
 
     # ------------------------------------------------------------------ Skills
     def _skill_context(self, user_text):
-        """取技能里与本次需求相关的片段；没有技能或没命中时返回空串。"""
+        """Returns relevant skill excerpts, or an empty string when unavailable or unmatched."""
         if not self.skill:
             self.last_skill_text = ''
             return ''
@@ -2434,7 +2400,7 @@ class AIAssistantCore(object):
         return text
 
     def skill_api(self, type_name):
-        """按类型名取技能里的 API 文档（界面/调试用）。"""
+        """Returns API documentation for a type, for the UI or debugging."""
         if not self.skill:
             return ''
         return self.skill.api_doc(type_name)
@@ -2450,9 +2416,10 @@ class AIAssistantCore(object):
             counts = {}
             for t in g.created_types:
                 counts[t] = counts.get(t, 0) + 1
-            lines.append('Will create: ' + ', '.join('%s x%d' % (k, v) for k, v in counts.items()))
+            types = ', '.join('%s x%d' % (k, v) for k, v in counts.items())
+            lines.append(_diag('runtime.preview_create', types=types))
         if g.writes:
-            lines.append('Will write %d attributes' % len(g.writes))
+            lines.append(_diag('runtime.preview_write', count=len(g.writes)))
         errs = [i for i in g.issues if i.level == 'error']
         warns = [i for i in g.issues if i.level == 'warning']
         for i in errs[:5]:
@@ -2479,7 +2446,7 @@ def create_core(config_path=None, **kwargs):
 
 
 # ==========================================================================
-# 窗口层：AssistantDialog
+# Window layer: AssistantDialog
 # ==========================================================================
 
 WELCOME = ('I can turn your description into a PipeCAD model.<br>'
@@ -2498,6 +2465,9 @@ class AssistantDialog(QDialog):
         self._queue = queue.Queue()
         self._busy = False
         self._turn = None
+        self._languages = list(Localization.get_available_languages().items())
+        self._language = ('en' if 'en' in Localization.get_available_languages()
+                          else self._languages[0][0])
         self.setupUi()
 
         self._timer = QTimer(self)
@@ -2508,7 +2478,7 @@ class AssistantDialog(QDialog):
 
     # ------------------------------------------------------------------ UI
     def closeEvent(self, event):
-        '''关掉窗口时清掉全局引用，下次 show() 能重新创建。'''
+        '''Clears the global reference on close so show() can create a new window next time.'''
         global _dialog
         _dialog = None
         QDialog.closeEvent(self, event)
@@ -2526,6 +2496,15 @@ class AssistantDialog(QDialog):
         # Removed code preview area: conversation log fills window, model taller for better visibility
         self.chatView = QTextBrowser()
         outer.addWidget(self.chatView)
+
+        languageRow = QHBoxLayout()
+        languageRow.addWidget(QLabel(self.tr('Response language:')))
+        self.languageCombo = QComboBox()
+        for _code, label in self._languages:
+            self.languageCombo.addItem(label)
+        languageRow.addWidget(self.languageCombo)
+        languageRow.addStretch(1)
+        outer.addLayout(languageRow)
 
         self.input = QPlainTextEdit()
         self.input.setPlaceholderText(
@@ -2551,13 +2530,14 @@ class AssistantDialog(QDialog):
         self.btnExec.clicked.connect(self.on_execute)
         self.btnClear.clicked.connect(self.on_clear)
         self.btnSettings.clicked.connect(self.on_settings)
+        self.languageCombo.currentIndexChanged.connect(self._on_language_changed)
 
         self.append_html('<b>AI Assistant</b><br>%s' % WELCOME)
 
     # ------------------------------------------------------------------ Core
     def _init_core(self):
         try:
-            self.core = create_core()
+            self.core = create_core(language=self._language)
             cfg = load_config()
             self.append_html('<span style="color:#888">%s</span>'
                              % self.tr('Model %s | Config %s')
@@ -2565,13 +2545,10 @@ class AssistantDialog(QDialog):
             self.status.setText(self.tr('Ready'))
             if not cfg.get('api_key') and not cfg.get('mock'):
                 self.append_html('<span style="color:#c00">%s</span>'
-                                 % self.tr('No API key configured. Click Settings to '
-                                           'choose an AI provider and enter your key, '
-                                           'or run Assistant.init_config(mock=True) '
-                                           'to try the UI first.'))
+                                 % _esc(_diag('runtime.api_key_missing_message')))
         except Exception as ex:
             self.append_html('<span style="color:#c00">%s</span>'
-                             % self.tr('Initialization failed: %s') % ex)
+                             % _esc(_diag('runtime.initialization_error', error=ex)))
 
         # Window still usable when MetaData unreadable, but explain clearly; don't wait until user clicks Generate to error
         try:
@@ -2581,14 +2558,9 @@ class AssistantDialog(QDialog):
                              % (len(md.types), md.path))
         except Exception as ex:
             self.append_html('<span style="color:#c00">%s</span>'
-                             % (self.tr('Cannot read MetaData.json (%s).<br>'
-                                        'The window still works, but no script can be '
-                                        'generated yet. Run <b>Assistant.selfcheck()</b> '
-                                        'to see what is missing, or specify the file with '
-                                        '<b>Assistant.set_metadata(r"full\\path\\MetaData.json")</b>.')
-                                % _esc(ex)))
+                             % _esc(_diag('runtime.metadata_unavailable', error=ex)))
 
-        # 技能是可选的：有就报规模，没有就说明怎么补，绝不因为缺技能挡住使用
+        # Skills are optional: report their status, but never block the assistant when they are missing.
         pack = getattr(self.core, 'skill', None) if self.core else None
         if pack is not None:
             self.append_html('<span style="color:#888">%s</span>'
@@ -2600,6 +2572,13 @@ class AssistantDialog(QDialog):
                                        'pipecad-dev-python under '
                                        '&lt;PipeCAD install dir&gt;/skills/, or set '
                                        'PIPECAD_SKILLS to the skills directory.'))
+
+    def _on_language_changed(self, index):
+        if index < 0 or index >= len(self._languages):
+            return
+        self._language = self._languages[index][0]
+        if self.core:
+            self.core.set_language(self._language)
 
     # ------------------------------------------------------------------ Events
     def keyPressEvent(self, event):
@@ -2628,7 +2607,7 @@ class AssistantDialog(QDialog):
         try:
             context_text = build_context()
         except Exception as ex:
-            context_text = self.tr('(context unavailable: %s)') % ex
+            context_text = _diag('runtime.context_unavailable', error=ex)
 
         self._set_busy(True, self.tr('Thinking...'))
         t = threading.Thread(target=self._worker_plan, args=(text, context_text))
@@ -2642,7 +2621,8 @@ class AssistantDialog(QDialog):
         except LLMError as ex:
             self._queue.put(('error', str(ex)))
         except Exception as ex:
-            self._queue.put(('error', '%s: %s' % (type(ex).__name__, ex)))
+            self._queue.put(('error', _diag('runtime.execution_error',
+                                             error_type=type(ex).__name__, error=ex)))
 
     def _poll(self):
         try:
@@ -2667,7 +2647,7 @@ class AssistantDialog(QDialog):
             self.btnExec.setEnabled(False)
             return
 
-        # 预览区已移除：脚本不再展示给用户，直接点 Execute 即执行
+        # The preview area was removed; clicking Execute runs the script directly.
         if turn.ok:
             self.btnExec.setEnabled(True)
             self.status.setText(self.tr('Validated, ready to execute'))
@@ -2675,7 +2655,7 @@ class AssistantDialog(QDialog):
             self.btnExec.setEnabled(False)
             self.status.setText(self.tr('Validation failed'))
             self.append_html('<span style="color:#c00">%s<pre>%s</pre></span>'
-                             % (self.tr('Script failed validation:'),
+                             % (_diag('runtime.validation_failed_label'),
                                 _esc(turn.issues_text())))
 
     def on_execute(self, *args):        # PythonQt clicked passes bool parameter, ignore it
@@ -2691,16 +2671,16 @@ class AssistantDialog(QDialog):
 
         res = self.core.execute(self._turn.script)
         if res.ok:
-            # 自动修复过：同步最终脚本，下次 Execute 用修好的版本
+            # Keep the repaired script so subsequent execution uses the corrected version.
             if res.repaired_script:
                 self._turn.script = res.repaired_script
             self.append_html('<b style="color:#1a6">%s</b><pre>%s</pre>'
-                             % (self.tr('Execution result:'), _esc(res.summary())))
+                             % (_diag('runtime.execution_result_label'), _esc(res.summary())))
             self.status.setText(self.tr('Execution finished'))
             self.btnExec.setEnabled(False)
         else:
             self.append_html('<span style="color:#c00">%s</span>'
-                             % (self.tr('Execution failed: %s') % _esc(res.error)))
+                             % _esc(_diag('runtime.execution_failed', error=res.error)))
             if res.traceback:
                 self.append_html('<pre>%s</pre>' % _esc(res.traceback))
             for note in res.notes:
@@ -2708,7 +2688,7 @@ class AssistantDialog(QDialog):
             self.status.setText(self.tr('Execution failed'))
 
     def on_settings(self, *args):
-        '''打开设置对话框，让用户自己选 AI 服务并填 API Key。'''
+        '''Opens settings so the user can choose an AI provider and enter an API key.'''
         dlg = SettingsDialog(self)
         if dlg.exec_():
             cfg = dlg.result_config
@@ -2716,7 +2696,7 @@ class AssistantDialog(QDialog):
             target = load_config().get('_source') or None
             init_config(api_key=cfg['api_key'], base_url=cfg['base_url'],
                         model=cfg['model'], path=target, overwrite=True)
-            # 重建核心，让新配置立即生效
+            # Recreate the core so the new configuration takes effect immediately.
             self._init_core()
             self.append_html('<span style="color:#1a6">%s</span>'
                              % (self.tr('Settings saved. Model: %s')
@@ -2734,6 +2714,7 @@ class AssistantDialog(QDialog):
     def _set_busy(self, busy, text):
         self._busy = busy
         self.btnSend.setEnabled(not busy)
+        self.languageCombo.setEnabled(not busy)
         if busy:
             self.btnExec.setEnabled(False)
         self.status.setText(text)
@@ -2743,11 +2724,11 @@ class AssistantDialog(QDialog):
         self.scroll_to_end()
 
     def scroll_to_end(self):
-        '''滚到底。
+        '''Scrolls the chat view to the bottom.
 
-        PythonQt 对 QAbstractSlider 的 maximum 有两种暴露方式：Qt4 绑定时是
-        只读属性（int），Qt5 绑定时是方法。直接 bar.maximum() 在 Qt4 上会抛
-        TypeError: 'int' object is not callable，所以两种都试。
+        PythonQt exposes QAbstractSlider.maximum differently: as a read-only int
+        property in Qt4 bindings and as a method in Qt5 bindings. Calling
+        bar.maximum() raises TypeError in Qt4, so both forms are supported.
         '''
         try:
             bar = self.chatView.verticalScrollBar()
@@ -2764,7 +2745,7 @@ class AssistantDialog(QDialog):
 
 
 def _qt_text(widget):
-    '''取控件文本：PythonQt 里 QLineEdit.text 可能是属性(str)也可能是方法，两种都兼容。'''
+    '''Reads a widget's text, supporting QLineEdit.text as a property or method.'''
     v = getattr(widget, 'text', '')
     return v() if callable(v) else (v or '')
 
@@ -2781,7 +2762,7 @@ AI_PROVIDERS = [
 
 
 class SettingsDialog(QDialog):
-    '''AI 设置：选服务、填 API Key / Base URL / Model，保存到配置文件。'''
+    '''AI settings dialog for choosing a provider and saving its API key, base URL, and model.'''
 
     def __init__(self, parent=None):
         QDialog.__init__(self, parent)
@@ -2850,7 +2831,7 @@ class SettingsDialog(QDialog):
         self.editUrl.setText(url)
         self.editModel.setText(model)
 
-        idx = len(AI_PROVIDERS) - 1      # 默认落到 Custom
+        idx = len(AI_PROVIDERS) - 1      # Default to Custom
         for i, (_name, p_url, p_model) in enumerate(AI_PROVIDERS):
             if p_url and p_url.rstrip('/').lower() == url.rstrip('/').lower():
                 idx = i
@@ -2889,7 +2870,7 @@ class SettingsDialog(QDialog):
         self.reject()
 
     def exec_(self):
-        '''兼容 exec_ / exec 两种 PythonQt 绑定。'''
+        '''Supports both exec_ and exec in PythonQt bindings.'''
         try:
             return QDialog.exec_(self)
         except AttributeError:
@@ -2903,10 +2884,10 @@ def _esc(text):
 
 
 def _qt_value(obj, name, default=0):
-    '''读取 PythonQt 上的同名成员，属性/方法两种形态都兼容。
+    '''Reads a PythonQt member, supporting both property and method forms.
 
-    Qt4 绑定里 maximum/minimum/value 是属性，Qt5 绑定里是方法，
-    同一份代码要在两代 PipeCAD 上都跑得起来，只能这样折中。
+    Qt4 bindings expose maximum/minimum/value as properties, while Qt5 bindings
+    expose them as methods. This accommodates both PipeCAD versions.
     '''
     if obj is None:
         return default
@@ -2924,12 +2905,11 @@ _dialog = None
 
 
 def _main_window_from_gui():
-    '''取 PipeCAD 主窗口实例。
+    '''Returns the PipeCAD main-window instance.
 
-    `PipeCAD.GUI.MainWindow` 就是 QMainWindow 实例本身，直接拿来做 parent。
-    兼容两种写法，其余情况一律返回 None：
-      - `from PipeCAD.GUI import MainWindow` 直接拿到实例
-      - `PipeCAD.GUI.MainWindow` 是个模块，模块属性里挂着实例
+    Supports both cases and returns None otherwise:
+      - `from PipeCAD.GUI import MainWindow` returns the instance directly.
+      - `PipeCAD.GUI.MainWindow` is a module containing the instance as an attribute.
     '''
     try:
         from PipeCAD.GUI import MainWindow
@@ -2939,11 +2919,11 @@ def _main_window_from_gui():
     if MainWindow is None:
         return None
 
-    # 常见情况：导入的就是实例
+    # Most commonly, the imported value is the instance itself.
     if not isinstance(MainWindow, type(os)) and not isinstance(MainWindow, type):
         return MainWindow
 
-    # 少数情况：MainWindow 是模块，实例挂在同名属性上
+    # In some installations, MainWindow is a module containing the instance.
     if isinstance(MainWindow, type(os)):
         for attr in ('MainWindow', 'mainWindow'):
             v = getattr(MainWindow, attr, None)
@@ -2953,7 +2933,7 @@ def _main_window_from_gui():
 
 
 def _window_label(w):
-    '''给窗口起个便于打印的名字，取不到属性也不至于抛异常。'''
+    '''Returns a printable window label without raising if its properties are unavailable.'''
     try:
         title = w.windowTitle() if callable(getattr(w, 'windowTitle', None)) else \
             getattr(w, 'windowTitle', '')
@@ -2964,15 +2944,16 @@ def _window_label(w):
             type(w).__name__
     except Exception:
         cls = type(w).__name__
-    return '%s（%s）' % (title or '(无标题)', cls)
+    return _diag('selfcheck.window_label',
+                 title=title or _diag('selfcheck.untitled'), class_name=cls)
 
 
 def main_window():
-    '''取 PipeCAD 主窗口，作为 AssistantDialog 的 parent。
+    '''Returns the PipeCAD main window to use as AssistantDialog's parent.
 
-    优先用已经显示的主窗口（QApplication.activeWindow），它最可靠；
-    还没显示时再按 `PipeCAD.GUI.MainWindow` 取。都取不到返回 None，
-    窗口会作为独立窗口打开，功能不受影响。
+    Prefer the visible main window from QApplication.activeWindow. If it is not
+    available yet, look up `PipeCAD.GUI.MainWindow`. If neither is available,
+    return None and open the dialog as a standalone window.
     '''
     try:
         from PythonQt.QtGui import QApplication
@@ -2987,10 +2968,10 @@ def main_window():
 
 
 def show(parent=None):
-    '''在 PipeCAD 里打开窗口（非模态，重复调用只激活已有窗口）。
+    '''Opens a non-modal window in PipeCAD, activating it if it is already open.
 
-    parent 不传时自动取 PipeCAD 主窗口（MainWindow），这样窗口会跟着主窗口
-    最小化/关闭，也不会在任务栏多出一个独立条目。
+    If parent is omitted, the PipeCAD main window is used so the dialog follows
+    its minimize/close behavior and does not create a separate taskbar entry.
     '''
     global _dialog
     if _dialog is None:
@@ -3008,7 +2989,7 @@ def show(parent=None):
 
 
 # ==========================================================================
-# 本地桥：外部 Agent 通过 HTTP 驱动
+# Local bridge: drive the assistant over HTTP from an external agent.
 # ==========================================================================
 
 class _Job(object):
@@ -3035,7 +3016,7 @@ class Bridge(object):
 
         class Handler(BaseHTTPRequestHandler):
             def log_message(self, fmt, *args):
-                pass  # 安静点，别刷 PipeCAD 输出窗口
+                pass  # Keep HTTP logs out of the PipeCAD output window.
 
             def _auth(self):
                 if bridge.token and self.headers.get('X-Token', '') != bridge.token:
@@ -3118,7 +3099,7 @@ class Bridge(object):
 
     # ------------------------------------------------------------------ Main Thread
     def _pump(self):
-        '''在主线程把排队中的脚本执行掉。'''
+        '''Runs queued scripts on the main thread.'''
         for _ in range(4):  # Process max 4 at once, don't freeze UI
             try:
                 job = self._jobs.get_nowait()
@@ -3151,138 +3132,153 @@ def stop_bridge():
 
 
 # ==========================================================================
-# 部署自检
+# Deployment self-check
 # ==========================================================================
 
-def selfcheck():
-    '''逐项检查运行环境，返回 True 表示可用。
+def selfcheck(language=None):
+    '''Checks the runtime environment and returns True when required components are available.
 
-    在 PipeCAD 命令窗口里：
+    Run from the PipeCAD command window:
         from PipeCAD.AI import Assistant
         Assistant.selfcheck()
     '''
+    if language is not None:
+        language = _validate_request_language(language)
+        Localization.get_instance(language).set_language(language)
+
+    def message(key, **kwargs):
+        return _diag('selfcheck.' + key, **kwargs)
+
+    def report(level, key, **kwargs):
+        print('[%s] %s' % (message(level), message(key, **kwargs)))
+
     here = os.path.abspath(__file__)
     ok = True
 
-    def title(t):
+    def title(key):
+        text = message(key)
         print('')
-        print('== %s ' % t + '=' * max(0, 58 - len(t)))
+        print('== %s ' % text + '=' * max(0, 58 - len(text)))
 
-    title('环境')
-    print('Python      : %s' % sys.version.split()[0])
-    print('模块文件    : %s' % here)
-    print('文件大小    : %d bytes' % os.path.getsize(here))
+    title('environment')
+    print(message('python_version', version=sys.version.split()[0]))
+    print(message('module_file', path=here))
+    print(message('file_size', size=os.path.getsize(here)))
     try:
         import PipeCAD as _pkg
         _p = getattr(_pkg, '__file__', None)
         if _p:
-            print('PipeCAD 包  : %s' % os.path.dirname(os.path.abspath(_p)))
+            print(message('package_path', path=os.path.dirname(os.path.abspath(_p))))
         else:
-            print('PipeCAD 包  : %s' % '; '.join(getattr(_pkg, '__path__', []) or ['(命名空间包)']))
+            package_paths = getattr(_pkg, '__path__', []) or [message('package_namespace')]
+            print(message('package_path', path='; '.join(package_paths)))
     except Exception as ex:
-        print('PipeCAD 包  : 导入失败 -> %s' % ex)
+        report('fail', 'package_import_failed', error=ex)
 
-    title('PythonQt（窗口层）')
+    title('pythonqt')
     if QT_AVAILABLE:
-        print('OK   可用')
+        report('ok', 'available')
         mw = main_window()
         if mw is None:
-            print('WARN 取不到 PipeCAD 主窗口，窗口将作为独立窗口打开（功能不受影响）')
+            report('warn', 'main_window_unavailable')
             try:
                 from PipeCAD.GUI import MainWindow  # noqa: F401
-                print('     PipeCAD.GUI.MainWindow 可导入，但没有可用的实例；')
-                print('     请先点一下主窗口再 show()，或显式传：Assistant.show(主窗口对象)')
+                print(message('main_window_no_instance'))
+                print(message('activate_main_window'))
             except Exception as ex:
-                print('     from PipeCAD.GUI import MainWindow 失败 -> %s' % ex)
+                print(message('main_window_import_failed', error=ex))
         else:
-            print('OK   主窗口：%s' % _window_label(mw))
+            report('ok', 'main_window', name=_window_label(mw))
     else:
         ok = False
-        print('FAIL 不可用：%s' % QT_IMPORT_ERROR)
-        print('     窗口打不开；核心层（create_core / 执行脚本）仍然可用。')
-        print('     确认是在 PipeCAD 命令窗口里运行，不是外部 python.exe。')
+        report('fail', 'window_layer_unavailable', error=QT_IMPORT_ERROR)
+        print(message('core_available'))
+        print(message('run_inside_pipecad'))
 
-    title('MetaData.json')
+    title('metadata')
     try:
         md = get_metadata()
-        print('OK   %s' % md.path)
-        print('     %d 个类型 / %d 个属性' % (len(md.types), len(md.attr_names)))
+        report('ok', 'diagnostic_detail', error=md.path)
+        print(message('metadata_counts', types=len(md.types),
+                      attributes=len(md.attr_names)))
     except Exception as ex:
         ok = False
-        print('FAIL %s' % ex)
+        report('fail', 'diagnostic_detail', error=ex)
         if MetadataSearch.last:
-            print('     已探测的关键位置：')
+            print(message('metadata_probes'))
             for p in MetadataSearch.last[-6:]:
                 print('       %s' % p)
-        print('     排查：在资源管理器里搜一下 MetaData.json，把它的上一级目录设成 PIPECAD_HOME；')
-        print('           例如文件在 D:\\Projects\\PipeCAD\\data\\MetaData.json，')
-        print('           就设 PIPECAD_HOME=D:\\Projects\\PipeCAD')
-        print('           或者直接指定：Assistant.set_metadata(r"完整路径\\MetaData.json")')
+        print(message('metadata_troubleshooting'))
+        print(message('metadata_example'))
+        print(message('metadata_set_path'))
 
-    title('开发技能（可选）')
+    title('skill')
     try:
         st = skill_status()
         if not st:
-            print('WARN 未找到 pipecad-dev-python，按无技能模式运行（功能不受影响）')
-            print('     处理：把技能目录放到 <PipeCAD安装目录>/skills/pipecad-dev-python；')
-            print('           或设 PIPECAD_SKILLS=<skills目录>；或 PIPECAD_HOME=<技能上一级目录>')
-            print('     已探测的位置：')
+            report('warn', 'skill_not_found')
+            print(message('skill_install_path'))
+            print(message('skill_env_path'))
+            print(message('skill_probes'))
             for p in skill_roots()[:6]:
-                print('       %s %s' % ('[有]' if os.path.isdir(p) else '[无]', p))
+                print(message('path_exists' if os.path.isdir(p) else 'path_missing',
+                              path=p))
         else:
-            print('OK   %s' % st['root'])
-            print('     SKILL.md %d 段（%d bytes）/ API 文档 %d 个'
-                  % (st['sections'], st['skill_md_bytes'], st['api_docs']))
-            print('     技能内 MetaData：%s' % (st['metadata'] or '(无，仅作文档用)'))
-            # 检索自测：确认中文需求能召回到章节，而不是整包塞进 prompt
+            report('ok', 'skill_root', path=st['root'])
+            print(message('skill_counts', sections=st['sections'],
+                          bytes=st['skill_md_bytes'], documents=st['api_docs']))
+            print(message('skill_metadata',
+                          metadata=st['metadata'] or message('no_skill_metadata')))
             try:
                 probe = find_skill()
-                sample = probe.search('建一个长方体') if probe else ''
+                query = message('skill_test_query')
+                sample = probe.search(query) if probe else ''
                 if sample:
-                    print('OK   召回自测：「建一个长方体」-> %d 字（只注入相关片段）'
-                          % len(sample))
+                    report('ok', 'skill_test_passed', query=query, length=len(sample))
                 else:
-                    print('WARN 召回自测没命中，技能可能无法在对话中生效')
+                    report('warn', 'skill_test_missed')
             except Exception as ex:
-                print('WARN 召回自测失败 -> %s' % ex)
+                report('warn', 'skill_test_failed', error=ex)
     except Exception as ex:
-        print('WARN 技能检查异常 -> %s' % ex)
+        report('warn', 'skill_check_failed', error=ex)
 
-    title('模型配置')
+    title('model_config')
     try:
         cfg = load_config()
-        print('配置文件    : %s' % cfg.get('_source', '未找到，用默认值'))
+        config_path = cfg.get('_source') or message('config_missing')
+        print(message('config_file', path=config_path))
         print('base_url    : %s' % cfg.get('base_url'))
         print('model       : %s' % cfg.get('model'))
-        print('api_key     : %s' % ('已配置' if cfg.get('api_key') else '未配置'))
+        api_key_status = 'api_key_configured' if cfg.get('api_key') else 'api_key_missing'
+        print('api_key     : %s' % message(api_key_status))
         print('mock        : %s' % cfg.get('mock'))
         if not cfg.get('api_key') and not cfg.get('mock'):
-            print('     处理：Assistant.init_config(api_key="sk-...")   或先跑界面：')
-            print('           Assistant.init_config(mock=True)')
+            print(message('config_setup'))
+            print(message('config_mock_setup'))
     except Exception as ex:
         ok = False
-        print('FAIL 读取配置失败 -> %s' % ex)
+        report('fail', 'config_read_failed', error=ex)
 
-    title('网络')
+    title('network')
     try:
         import codecs
         try:
             codecs.lookup('idna')
-            print('OK   idna 编码器可用')
+            report('ok', 'idna_available')
         except LookupError:
-            print('WARN idna 编码器缺失（内嵌 Python 精简打包）')
-            print('     -> 调用模型时自动补一个 ASCII 降级实现，通常无需处理；')
-            print('        若仍失败，说明补丁没能生效，见下方 ensure_idna() 结果')
-        print('OK   ensure_idna() = %s（%s）'
-              % (ensure_idna(), '已启用降级实现' if _idna_patched else '使用标准库'))
+            report('warn', 'idna_missing')
+            print(message('idna_fallback'))
+            print(message('idna_fallback_failed'))
+        print(message('idna_status', result=ensure_idna(),
+                      mode=message('idna_patched' if _idna_patched else 'idna_standard')))
         try:
             cfg_n = load_config()
             base = cfg_n.get('base_url') or ''
             safe = _ascii_host(base)
-            print('OK   请求地址：%s' % safe)
+            report('ok', 'request_url', url=safe)
             if safe != base:
-                print('     （原始 %s 已转成 ASCII）' % base)
-            # 只做 TCP 连通性探测，不依赖 DNS 细节，也不发业务请求
+                print(message('url_ascii', url=base))
+            # Check TCP connectivity only; do not rely on DNS details or send an API request.
             try:
                 parts = urllib.parse.urlsplit(safe)
                 host = parts.hostname
@@ -3290,33 +3286,33 @@ def selfcheck():
                 if host:
                     sock = socket.create_connection((host, port), timeout=5)
                     sock.close()
-                    print('OK   %s:%d 可连通' % (host, port))
+                    report('ok', 'host_reachable', host=host, port=port)
             except Exception as ex:
-                print('WARN %s:%d 连不上 -> %s' % (host, port, ex))
-                print('     检查网络/代理（HTTP_PROXY、HTTPS_PROXY），或改用内网模型地址')
+                report('warn', 'host_unreachable', host=host, port=port, error=ex)
+                print(message('network_troubleshooting'))
         except Exception as ex:
-            print('WARN 网络探测失败 -> %s' % ex)
+            report('warn', 'network_probe_failed', error=ex)
     except Exception as ex:
-        print('WARN 网络检查异常 -> %s' % ex)
+        report('warn', 'network_check_failed', error=ex)
 
-    title('项目')
+    title('project')
     try:
         from PipeCAD.Database import Project
         proj = Project.Current
         if getattr(proj, 'IsOpen', False):
-            print('OK   已打开项目：%s' % getattr(proj, 'Name', '?'))
+            report('ok', 'project_open', name=getattr(proj, 'Name', '?'))
         else:
-            print('WARN 当前没有打开的项目，执行建模前需要先打开一个项目')
+            report('warn', 'project_not_open')
     except Exception as ex:
-        print('WARN 查询项目状态失败 -> %s' % ex)
+        report('warn', 'project_check_failed', error=ex)
 
-    title('结论')
+    title('conclusion')
     if ok:
-        print('环境可用。打开窗口：')
+        print(message('environment_ready'))
         print('    from PipeCAD.AI import Assistant')
         print('    Assistant.show()')
     else:
-        print('存在问题，按上面的 FAIL 项处理。')
+        print(message('environment_failed'))
     return ok
 
 

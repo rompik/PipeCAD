@@ -1,0 +1,421 @@
+{
+  "purpose": "PipeCAD-to-CAESAR II mapping used by the exporter; candidate mappings are not enabled.",
+  "qualification": "No generated file or proposed component mapping has been verified by a CAESAR II round trip. Review all engineering data before use.",
+  "reference": {
+    "caesar_ii_13_neutral_file": "https://docs.hexagonppm.com/r/en-US/CAESAR-II-Users-Guide/Version-13/337037",
+    "pipecad_metadata": "../skills/pipecad-dev-python/data/MetaData.json",
+    "exporter": "../python/PipeCAD/Design/General/CiiExporter.py",
+    "settings_example": "../python/PipeCAD/Design/General/cii_settings.example.json",
+    "exporter_header": {
+      "neutral_interface_version": 5.0,
+      "generating_versions": [10.0, 11.0],
+      "code_page": 1252
+    },
+    "field_indexing": "CII REL field indexes below are one-based.",
+    "version_semantics": "First observed writer-layout version in supplied reference files, not proof of the historically earliest version. null means unknown. documented_caesar_ii_version identifies the manual describing the CII target, not proof of a PipeCAD mapping or its introduction date."
+  },
+  "status_definitions": {
+    "implemented_unverified": "Present in the current exporter; not qualified by a CAESAR II import.",
+    "candidate": "Possible correspondence only; units, semantics and serialization need verification.",
+    "unmapped": "No reliable PipeCAD source or conversion has been established."
+  },
+  "lookup": {
+    "component_type": "TUBI",
+    "status": "implemented_unverified",
+    "source": [
+      "Spref.Name",
+      "Lbore"
+    ],
+    "settings": [
+      "specs[Spref.Name]",
+      "nominal_bore_mm"
+    ],
+    "description": "Choose exactly one settings entry matching the specification and nominal bore. Lbore is not the actual outside diameter."
+  },
+  "mappings": [
+    {
+      "component_types": [
+        "TUBI"
+      ],
+      "source": [
+        "Aposition"
+      ],
+      "target": "ELEMENTS.REL[1] FROM node",
+      "conversion": "Assign a node number using node_start and node_step; identical positions share a node.",
+      "status": "implemented_unverified",
+      "version": 10,
+      "documented_caesar_ii_version": 13
+    },
+    {
+      "component_types": [
+        "TUBI"
+      ],
+      "source": [
+        "Lposition"
+      ],
+      "target": "ELEMENTS.REL[2] TO node",
+      "conversion": "Assign a node number using node_start and node_step; identical positions share a node.",
+      "status": "implemented_unverified",
+      "version": 10,
+      "documented_caesar_ii_version": 13
+    },
+    {
+      "component_types": [
+        "TUBI"
+      ],
+      "source": [
+        "Aposition.X",
+        "Lposition.X"
+      ],
+      "target": "ELEMENTS.REL[3] delta X",
+      "conversion": "Lposition.X - Aposition.X, in mm.",
+      "status": "implemented_unverified",
+      "version": 10,
+      "documented_caesar_ii_version": 13
+    },
+    {
+      "component_types": [
+        "TUBI"
+      ],
+      "source": [
+        "Aposition.Y",
+        "Lposition.Y"
+      ],
+      "target": "ELEMENTS.REL[4] delta Y",
+      "conversion": "Lposition.Y - Aposition.Y, in mm.",
+      "status": "implemented_unverified",
+      "version": 10,
+      "documented_caesar_ii_version": 13
+    },
+    {
+      "component_types": [
+        "TUBI"
+      ],
+      "source": [
+        "Aposition.Z",
+        "Lposition.Z"
+      ],
+      "target": "ELEMENTS.REL[5] delta Z",
+      "conversion": "Lposition.Z - Aposition.Z, in mm.",
+      "status": "implemented_unverified",
+      "version": 10,
+      "documented_caesar_ii_version": 13
+    },
+    {
+      "component_types": [
+        "TUBI"
+      ],
+      "source": [
+        "Aposition"
+      ],
+      "target": "COORDS node and global X, Y, Z",
+      "conversion": "Use the start position of the first element in each disconnected group, in mm.",
+      "status": "implemented_unverified",
+      "version": 10,
+      "documented_caesar_ii_version": 13
+    },
+    {
+      "component_types": [
+        "TUBI"
+      ],
+      "source": [
+        "settings.outside_diameter_mm"
+      ],
+      "target": "ELEMENTS.REL[6] actual outside diameter",
+      "conversion": "Direct, mm.",
+      "status": "implemented_unverified",
+      "version": 10,
+      "documented_caesar_ii_version": 13
+    },
+    {
+      "component_types": [
+        "TUBI"
+      ],
+      "source": [
+        "settings.wall_thickness_mm"
+      ],
+      "target": "ELEMENTS.REL[7] wall thickness",
+      "conversion": "Direct, mm.",
+      "status": "implemented_unverified",
+      "version": 10,
+      "documented_caesar_ii_version": 13
+    },
+    {
+      "component_types": [
+        "TUBI"
+      ],
+      "source": [
+        "settings.insulation_thickness_mm"
+      ],
+      "target": "ELEMENTS.REL[8] insulation thickness",
+      "conversion": "Direct, mm.",
+      "status": "implemented_unverified",
+      "version": 10,
+      "documented_caesar_ii_version": 13
+    },
+    {
+      "component_types": [
+        "TUBI"
+      ],
+      "source": [
+        "settings.corrosion_allowance_mm"
+      ],
+      "target": "ELEMENTS.REL[9] corrosion allowance",
+      "conversion": "Direct, mm.",
+      "status": "implemented_unverified",
+      "version": 10,
+      "documented_caesar_ii_version": 13
+    },
+    {
+      "component_types": [
+        "TUBI"
+      ],
+      "source": [
+        "settings.temperature_c"
+      ],
+      "target": "ELEMENTS.REL[10] temperature 1",
+      "conversion": "Direct, degrees Celsius.",
+      "status": "implemented_unverified",
+      "version": 10,
+      "documented_caesar_ii_version": 13
+    },
+    {
+      "component_types": [
+        "TUBI"
+      ],
+      "source": [
+        "settings.pressure_kpa"
+      ],
+      "target": "ELEMENTS.REL[19] pressure 1",
+      "conversion": "Direct, kPa.",
+      "status": "implemented_unverified",
+      "version": 10,
+      "documented_caesar_ii_version": 13
+    },
+    {
+      "component_types": [
+        "TUBI"
+      ],
+      "source": [
+        "settings.cold_modulus_kpa"
+      ],
+      "target": "ELEMENTS.REL[28] cold elastic modulus",
+      "conversion": "Direct, kPa.",
+      "status": "implemented_unverified",
+      "version": 10,
+      "documented_caesar_ii_version": 13
+    },
+    {
+      "component_types": [
+        "TUBI"
+      ],
+      "source": [
+        "settings.poisson_ratio"
+      ],
+      "target": "ELEMENTS.REL[29] Poisson ratio",
+      "conversion": "Direct, dimensionless.",
+      "status": "implemented_unverified",
+      "version": 10,
+      "documented_caesar_ii_version": 13
+    },
+    {
+      "component_types": [
+        "TUBI"
+      ],
+      "source": [
+        "settings.pipe_density_kg_m3"
+      ],
+      "target": "ELEMENTS.REL[30] pipe density",
+      "conversion": "Divide kg/m3 by 1000000 to obtain kg/cm3.",
+      "status": "implemented_unverified",
+      "version": 10,
+      "documented_caesar_ii_version": 13
+    },
+    {
+      "component_types": [
+        "TUBI"
+      ],
+      "source": [
+        "settings.insulation_density_kg_m3"
+      ],
+      "target": "ELEMENTS.REL[31] insulation density",
+      "conversion": "Divide kg/m3 by 1000000 to obtain kg/cm3.",
+      "status": "implemented_unverified",
+      "version": 10,
+      "documented_caesar_ii_version": 13
+    },
+    {
+      "component_types": [
+        "TUBI"
+      ],
+      "source": [
+        "settings.fluid_density_kg_m3"
+      ],
+      "target": "ELEMENTS.REL[32] fluid density",
+      "conversion": "Divide kg/m3 by 1000000 to obtain kg/cm3.",
+      "status": "implemented_unverified",
+      "version": 10,
+      "documented_caesar_ii_version": 13
+    },
+    {
+      "component_types": [
+        "TUBI"
+      ],
+      "source": [
+        "settings.hot_modulus_kpa"
+      ],
+      "target": "ELEMENTS.REL[37] hot elastic modulus 1",
+      "conversion": "Direct, kPa.",
+      "status": "implemented_unverified",
+      "version": 10,
+      "documented_caesar_ii_version": 13
+    },
+    {
+      "component_types": [
+        "TUBI"
+      ],
+      "source": [
+        "settings.material_id"
+      ],
+      "target": "MISCEL_1.RRMAT material ID",
+      "conversion": "Direct, one material ID per element.",
+      "status": "implemented_unverified",
+      "version": 10,
+      "documented_caesar_ii_version": 13
+    },
+    {
+      "component_types": [
+        "TUBI"
+      ],
+      "source": [
+        "settings.ambient_temperature_c"
+      ],
+      "target": "MISCEL_1 execution options: ambient temperature",
+      "conversion": "Direct, degrees Celsius.",
+      "status": "implemented_unverified",
+      "version": 10,
+      "documented_caesar_ii_version": 13
+    },
+    {
+      "component_types": [
+        "ELBO",
+        "BEND"
+      ],
+      "source": [
+        "Radius"
+      ],
+      "target": "AUX_DATA.BEND bend radius",
+      "conversion": null,
+      "status": "candidate",
+      "notes": "Verify which radius attribute represents centreline bend radius and how tangent points map to CII nodes. Version 13 documentation says 13 values but lists 14.",
+      "version": null,
+      "documented_caesar_ii_version": 13
+    },
+    {
+      "component_types": [
+        "ELBO",
+        "BEND"
+      ],
+      "source": [
+        "Angle",
+        "Arrive",
+        "Leave"
+      ],
+      "target": "ELEMENTS geometry and AUX_DATA.BEND node positions",
+      "conversion": null,
+      "status": "candidate",
+      "notes": "Arrive and Leave are P-point identifiers; the CII bend representation and angle units are not established.",
+      "version": null,
+      "documented_caesar_ii_version": 13
+    },
+    {
+      "component_types": [
+        "VALV"
+      ],
+      "source": [
+        ":PSIWEIGHT"
+      ],
+      "target": "AUX_DATA.RIGID rigid weight",
+      "conversion": null,
+      "status": "candidate",
+      "notes": "Verify attribute availability, units, weight versus mass, rigid type and component geometry.",
+      "version": null,
+      "documented_caesar_ii_version": 13
+    },
+    {
+      "component_types": [
+        "SUPC",
+        "HANG"
+      ],
+      "source": [
+        ":NodeType",
+        ":NodeGap",
+        ":NodeStiff",
+        ":NodeFriction"
+      ],
+      "target": "AUX_DATA.RESTRANT restraint type, gap, stiffness and friction",
+      "conversion": null,
+      "status": "candidate",
+      "notes": "Verify ownership, array indexing, units, direction, node association and restraint type codes. Spring hanger data may require MISCEL_1 instead.",
+      "version": null,
+      "documented_caesar_ii_version": 13
+    },
+    {
+      "component_types": [
+        "REDU"
+      ],
+      "source": [
+        "Abore",
+        "Lbore",
+        "Spref.Name"
+      ],
+      "target": "AUX_DATA.REDUCERS diameter and wall thickness at TO node",
+      "conversion": null,
+      "status": "candidate",
+      "notes": "Nominal bores are not actual outside diameters. Resolve both end dimensions and direction; version 11 example and version 13 documentation use different record lengths.",
+      "version": null,
+      "documented_caesar_ii_version": 13
+    },
+    {
+      "component_types": [
+        "TEE"
+      ],
+      "source": [],
+      "target": "AUX_DATA.SIF&TEES",
+      "conversion": null,
+      "status": "unmapped",
+      "notes": "Branch node geometry, intersection type and piping-code-dependent factors require an agreed mapping.",
+      "version": null,
+      "documented_caesar_ii_version": 13
+    },
+    {
+      "component_types": [
+        "FLAN"
+      ],
+      "source": [],
+      "target": "AUX_DATA.FLANGES",
+      "conversion": null,
+      "status": "unmapped",
+      "notes": "Flange check data, method and geometry require an agreed mapping.",
+      "version": null,
+      "documented_caesar_ii_version": 13
+    }
+  ],
+  "other_unmapped_sections": [
+    "NODENAME",
+    "EXPJT",
+    "DISPLMNT",
+    "FORCMNT",
+    "UNIFORM",
+    "WIND",
+    "OFFSETS",
+    "ALLOWBLS",
+    "EQUIPMNT"
+  ],
+  "limitations": [
+    "Only TUBI is currently exported; all auxiliary pointers are zero.",
+    "Other REL fields are currently written as zero; this does not establish that zero is an appropriate engineering value.",
+    "The exporter reads implemented settings sources and versions from this file; conversion descriptions are informational and conversions remain fixed in code.",
+    "Candidate entries do not enable load case, support, bend or reducer export."
+  ]
+}
